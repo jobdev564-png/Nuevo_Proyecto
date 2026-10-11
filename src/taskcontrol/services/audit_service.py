@@ -13,7 +13,15 @@ if not logger.handlers:
 
 
 class AuditService:
-    """Servicio centralizado de auditoría y observabilidad estructurada."""
+    """Servicio centralizado de auditoría y observabilidad estructurada.
+
+    Vocabulario controlado de acciones (Principio VIII):
+    - Incremento 1: TASK_CREATED, STATUS_CHANGED, TASK_UPDATED, TASK_ASSIGNED
+    - 002-task-lifecycle-recovery (HU-05/HU-06/HU-14): TASK_DELETED,
+      TASK_REOPENED, PASSWORD_RESET_REQUESTED, PASSWORD_RESET_COMPLETED
+    Todo evento incluye actor_id/action/entity_id/timestamp UTC; details
+    nunca contiene secretos (tokens, contraseñas) — ver SC-006.
+    """
 
     @staticmethod
     def log_event(actor_id: int, action: str, entity_id: int, details: dict = None):

@@ -23,5 +23,8 @@
     <p style="margin-top: 1.5rem; text-align: center; font-size: 0.9rem; color: var(--text-muted);">
         ¿No tienes cuenta? <a href="{{ url_for('auth.register') }}" style="color: var(--primary); font-weight: 600;">Regístrate</a>
     </p>
+    <p style="margin-top: 0.75rem; text-align: center; font-size: 0.9rem; color: var(--text-muted);">
+        ¿Olvidaste tu contraseña? <a href="{{ url_for('auth.password_reset_request') }}" style="color: var(--primary); font-weight: 600;">Recupérala</a>
+    </p>
 </div>
 {% endblock %}

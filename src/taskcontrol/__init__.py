@@ -25,4 +25,18 @@ def create_app(config_name=None):
     app.register_blueprint(auth_bp, url_prefix="/auth")
     app.register_blueprint(tasks_bp, url_prefix="/tasks")
 
+    if config_name == "testing":
+        # Hook solo para fixtures de testing (research.md R-04).
+        # Nunca registrado en development/producción.
+        from src.taskcontrol.services.password_reset_service import (
+            PasswordResetService,
+        )
+
+        def _last_token_for_email(email: str):
+            return PasswordResetService._testing_tokens.get(
+                (email or "").strip().lower()
+            )
+
+        app.extensions["password_reset_testing"] = _last_token_for_email
+
     return app

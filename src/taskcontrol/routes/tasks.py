@@ -14,6 +14,8 @@ from src.taskcontrol.services.task_service import (
     TaskService,
     TaskValidationError,
     TaskNotFoundError,
+    TaskAlreadyDeletedError,
+    TaskDeletedError,
     InvalidStateTransitionError,
 )
 
@@ -165,6 +167,22 @@ def update_status_route(task_id: int):
         flash("Tarea no encontrada.", "error")
         return redirect(url_for("tasks.list_tasks")), 404
 
+    except TaskDeletedError:
+        # Eliminada: no filtrar existencia ni propiedad (FR-005, Principio VII)
+        if _is_json_request():
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "code": "TASK_NOT_FOUND",
+                        "message": "Tarea no encontrada",
+                    }
+                ),
+                404,
+            )
+        flash("Tarea no encontrada.", "error")
+        return redirect(url_for("tasks.list_tasks")), 404
+
     except InvalidStateTransitionError as e:
         if _is_json_request():
             return (
@@ -179,6 +197,130 @@ def update_status_route(task_id: int):
             )
         flash(str(e), "error")
         return redirect(url_for("tasks.list_tasks")), 400
+
+
+@tasks_bp.route("/<int:task_id>/delete", methods=["POST"])
+@tasks_bp.route("/<int:task_id>", methods=["DELETE"])
+@login_required
+def delete_task_route(task_id: int):
+    """Eliminación lógica de tarea propia (HU-05, FR-001/FR-002)."""
+    user_id = session["user_id"]
+
+    try:
+        task = TaskService.delete_task(user_id=user_id, task_id=task_id)
+
+        if _is_json_request():
+            return (
+                jsonify(
+                    {
+                        "status": "success",
+                        "message": "Tarea eliminada correctamente",
+                        "data": {
+                            "id": task.id,
+                            "is_deleted": True,
+                            "deleted_at": task.deleted_at.isoformat()
+                            if task.deleted_at
+                            else None,
+                        },
+                    }
+                ),
+                200,
+            )
+
+        flash("Tarea eliminada correctamente.", "success")
+        return redirect(url_for("tasks.list_tasks"))
+
+    except TaskAlreadyDeletedError:
+        if _is_json_request():
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "code": "TASK_ALREADY_DELETED",
+                        "message": "La tarea ya fue eliminada",
+                    }
+                ),
+                404,
+            )
+        flash("La tarea ya fue eliminada.", "error")
+        return redirect(url_for("tasks.list_tasks")), 404
+
+    except TaskNotFoundError:
+        if _is_json_request():
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "code": "TASK_NOT_FOUND",
+                        "message": "Tarea no encontrada",
+                    }
+                ),
+                404,
+            )
+        flash("Tarea no encontrada.", "error")
+        return redirect(url_for("tasks.list_tasks")), 404
+
+
+@tasks_bp.route("/<int:task_id>/reopen", methods=["POST"])
+@login_required
+def reopen_task_route(task_id: int):
+    """Reapertura dedicada completed→pending (HU-06, FR-007/FR-008/FR-009)."""
+    user_id = session["user_id"]
+
+    try:
+        task = TaskService.reopen_task(user_id=user_id, task_id=task_id)
+
+        if _is_json_request():
+            return (
+                jsonify(
+                    {
+                        "status": "success",
+                        "message": "Tarea reabierta correctamente",
+                        "data": {
+                            "id": task.id,
+                            "previous_status": "completed",
+                            "current_status": task.status,
+                            "updated_at": task.updated_at.isoformat()
+                            if task.updated_at
+                            else None,
+                        },
+                    }
+                ),
+                200,
+            )
+
+        flash("Tarea reabierta correctamente.", "success")
+        return redirect(url_for("tasks.list_tasks"))
+
+    except InvalidStateTransitionError as e:
+        if _is_json_request():
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "code": "INVALID_STATE_TRANSITION",
+                        "message": str(e),
+                    }
+                ),
+                400,
+            )
+        flash(str(e), "error")
+        return redirect(url_for("tasks.list_tasks")), 400
+
+    except (TaskNotFoundError, TaskDeletedError):
+        if _is_json_request():
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "code": "TASK_NOT_FOUND",
+                        "message": "Tarea no encontrada",
+                    }
+                ),
+                404,
+            )
+        flash("Tarea no encontrada.", "error")
+        return redirect(url_for("tasks.list_tasks")), 404
 
 
 @tasks_bp.route("/<int:task_id>/edit", methods=["GET", "POST", "PUT"])
@@ -249,4 +391,19 @@ def edit_task_route(task_id: int):
                 400,
             )
         flash(str(e), "error")
+        return render_template("tasks/edit.html", task=task), 400
+
+    except TaskDeletedError:
+        if _is_json_request():
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "code": "TASK_DELETED",
+                        "message": "No se puede modificar una tarea eliminada",
+                    }
+                ),
+                400,
+            )
+        flash("No se puede modificar una tarea eliminada.", "error")
         return render_template("tasks/edit.html", task=task), 400

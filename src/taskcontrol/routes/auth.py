@@ -13,8 +13,21 @@ from src.taskcontrol.services.user_service import (
     ValidationError,
     DuplicateEmailError,
 )
+from src.taskcontrol.services.password_reset_service import (
+    PasswordResetService,
+    InvalidOrExpiredTokenError,
+    ValidationError as ResetValidationError,
+)
 
 auth_bp = Blueprint("auth", __name__)
+
+
+def _wants_json():
+    return (
+        request.is_json
+        or request.headers.get("Accept") == "application/json"
+        or request.path.startswith("/api/")
+    )
 
 
 @auth_bp.route("/register", methods=["GET", "POST"])
@@ -160,4 +173,96 @@ def logout():
         )
 
     flash("Has cerrado sesión.", "info")
+    return redirect(url_for("auth.login"))
+
+
+@auth_bp.route("/password-reset-request", methods=["GET", "POST"])
+def password_reset_request():
+    """Solicitud pública de restablecimiento (HU-14, FR-011/FR-012)."""
+    if request.method == "GET":
+        return render_template("auth/password_reset_request.html")
+
+    data = request.get_json(silent=True) or request.form
+
+    if "email" not in data or data.get("email") is None:
+        if _wants_json():
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "code": "VALIDATION_ERROR",
+                        "message": "El correo electrónico es obligatorio",
+                    }
+                ),
+                400,
+            )
+        flash("El correo electrónico es obligatorio.", "error")
+        return render_template("auth/password_reset_request.html"), 400
+
+    result = PasswordResetService.request_reset(data.get("email", ""))
+
+    if _wants_json():
+        return jsonify({"status": "success", "message": result["message"]}), 200
+
+    flash(result["message"], "success")
+    return render_template("auth/password_reset_request.html")
+
+
+@auth_bp.route("/password-reset-confirm", methods=["GET", "POST"])
+def password_reset_confirm():
+    """Confirmación pública con token de un solo uso (HU-14, FR-015/FR-017)."""
+    if request.method == "GET":
+        return render_template(
+            "auth/password_reset_confirm.html",
+            token=request.args.get("token", ""),
+        )
+
+    data = request.get_json(silent=True) or request.form
+    token = data.get("token", "")
+    new_password = data.get("new_password") or data.get("password", "")
+
+    try:
+        email = PasswordResetService.confirm_reset(token, new_password)
+    except ResetValidationError as e:
+        if _wants_json():
+            return (
+                jsonify(
+                    {"status": "error", "code": "VALIDATION_ERROR", "message": str(e)}
+                ),
+                400,
+            )
+        flash(str(e), "error")
+        return render_template("auth/password_reset_confirm.html", token=token), 400
+    except InvalidOrExpiredTokenError as e:
+        if _wants_json():
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "code": "INVALID_OR_EXPIRED_TOKEN",
+                        "message": str(e),
+                    }
+                ),
+                400,
+            )
+        flash(str(e), "error")
+        return render_template("auth/password_reset_confirm.html", token=token), 400
+
+    # Invalidación de sesiones previas tras restablecimiento (Edge Case).
+    session.clear()
+
+    if _wants_json():
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "message": "Contraseña restablecida correctamente. "
+                    "Inicia sesión con tu nueva contraseña",
+                    "data": {"email": email},
+                }
+            ),
+            200,
+        )
+
+    flash("Contraseña restablecida correctamente. Inicia sesión.", "success")
     return redirect(url_for("auth.login"))
