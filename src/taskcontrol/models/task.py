@@ -15,6 +15,18 @@ class Task(db.Model):
     description = db.Column(db.Text, nullable=True)
     due_date = db.Column(db.Date, nullable=True)
     status = db.Column(db.String(20), nullable=False, default="pending")
+    priority = db.Column(
+        db.String(10), nullable=False, default="medium", server_default="medium"
+    )
+    category_id = db.Column(
+        db.Integer,
+        db.ForeignKey("categories.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    category = db.relationship(
+        "Category", backref=db.backref("tasks", lazy="dynamic")
+    )
     is_deleted = db.Column(db.Boolean, nullable=False, default=False, index=True)
     deleted_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(
@@ -35,8 +47,25 @@ class Task(db.Model):
             "description": self.description,
             "due_date": self.due_date.isoformat() if self.due_date else None,
             "status": self.status,
+            "priority": self.priority,
+            "category_id": self.category_id,
+            "category_name": self.category.name if self.category else None,
+            "is_overdue": self.is_overdue,
             "is_deleted": self.is_deleted,
             "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+
+    @property
+    def is_overdue(self) -> bool:
+        """Indicador de vencida calculado SOLO en backend (HU-09, FR-016/17).
+
+        True si y solo si: tiene due_date, due_date < fecha UTC del servidor,
+        estado distinto de 'completed' y no eliminada. Nunca persistido.
+        """
+        if self.status == "completed" or getattr(self, "is_deleted", False):
+            return False
+        if not self.due_date:
+            return False
+        return self.due_date < datetime.now(timezone.utc).date()

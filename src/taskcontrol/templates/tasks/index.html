@@ -26,16 +26,41 @@
                 <label for="description">Descripción (opcional)</label>
                 <textarea id="description" name="description" class="form-control" rows="2" placeholder="Detalles adicionales..."></textarea>
             </div>
+            <div class="form-group">
+                <label for="priority">Prioridad</label>
+                <select id="priority" name="priority" class="form-control">
+                    <option value="high">Alta</option>
+                    <option value="medium" selected>Media</option>
+                    <option value="low">Baja</option>
+                </select>
+            </div>
             <button type="submit" class="btn btn-primary btn-sm">Guardar Tarea</button>
         </form>
     </div>
 
     <!-- Filtros de Estado (HU-02) -->
     <div class="filters">
-        <a href="{{ url_for('tasks.list_tasks') }}" class="filter-btn {% if not current_status %}active{% endif %}">Todas</a>
-        <a href="{{ url_for('tasks.list_tasks', status='pending') }}" class="filter-btn {% if current_status == 'pending' %}active{% endif %}">Pendientes</a>
-        <a href="{{ url_for('tasks.list_tasks', status='in_progress') }}" class="filter-btn {% if current_status == 'in_progress' %}active{% endif %}">En Progreso</a>
-        <a href="{{ url_for('tasks.list_tasks', status='completed') }}" class="filter-btn {% if current_status == 'completed' %}active{% endif %}">Completadas</a>
+        <a href="{{ url_for('tasks.list_tasks', sort_by=current_sort_by, order=current_order, category_id=current_category_id) }}" class="filter-btn {% if not current_status %}active{% endif %}">Todas</a>
+        <a href="{{ url_for('tasks.list_tasks', status='pending', sort_by=current_sort_by, order=current_order, category_id=current_category_id) }}" class="filter-btn {% if current_status == 'pending' %}active{% endif %}">Pendientes</a>
+        <a href="{{ url_for('tasks.list_tasks', status='in_progress', sort_by=current_sort_by, order=current_order, category_id=current_category_id) }}" class="filter-btn {% if current_status == 'in_progress' %}active{% endif %}">En Progreso</a>
+        <a href="{{ url_for('tasks.list_tasks', status='completed', sort_by=current_sort_by, order=current_order, category_id=current_category_id) }}" class="filter-btn {% if current_status == 'completed' %}active{% endif %}">Completadas</a>
+    </div>
+
+    <!-- Filtro por Categoría (HU-08 / US4) -->
+    <div class="filters">
+        <a href="{{ url_for('tasks.list_tasks', status=current_status, sort_by=current_sort_by, order=current_order) }}" class="filter-btn {% if not current_category_id %}active{% endif %}">Todas las categorías</a>
+        {% for cat in categories or [] %}
+            <a href="{{ url_for('tasks.list_tasks', status=current_status, sort_by=current_sort_by, order=current_order, category_id=cat.id) }}" class="filter-btn {% if current_category_id == cat.id|string %}active{% endif %}">{{ cat.name }}</a>
+        {% endfor %}
+        <a href="{{ url_for('tasks.list_tasks', status=current_status, sort_by=current_sort_by, order=current_order, category_id='none') }}" class="filter-btn {% if current_category_id == 'none' %}active{% endif %}">Sin categoría</a>
+    </div>
+
+    <!-- Ordenamiento por Prioridad (HU-07) + Filtros combinados (US4) -->
+    <div class="sort-bar" style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap;">
+        <span style="font-size: 0.9rem; color: var(--text-muted);">Ordenar:</span>
+        <a href="{{ url_for('tasks.list_tasks', status=current_status, category_id=current_category_id) }}" class="filter-btn {% if not current_sort_by %}active{% endif %}">Recientes</a>
+        <a href="{{ url_for('tasks.list_tasks', status=current_status, category_id=current_category_id, sort_by='priority', order='desc') }}" class="filter-btn {% if current_sort_by == 'priority' and current_order == 'desc' %}active{% endif %}">Prioridad (Mayor a Menor)</a>
+        <a href="{{ url_for('tasks.list_tasks', status=current_status, category_id=current_category_id, sort_by='priority', order='asc') }}" class="filter-btn {% if current_sort_by == 'priority' and current_order == 'asc' %}active{% endif %}">Prioridad (Menor a Mayor)</a>
     </div>
 
     <!-- Listado de Tareas (HU-02) -->
@@ -51,6 +76,18 @@
                                 {% elif task.status == 'completed' %}Completada
                                 {% endif %}
                             </span>
+                            <span class="badge badge-priority-{{ task.priority or 'medium' }}">
+                                {% if task.priority == 'high' %}Alta
+                                {% elif task.priority == 'low' %}Baja
+                                {% else %}Media
+                                {% endif %}
+                            </span>
+                            {% if task.is_overdue %}
+                                <span class="badge badge-overdue">Vencida</span>
+                            {% endif %}
+                            {% if task.category %}
+                                <span class="badge badge-category">{{ task.category.name }}</span>
+                            {% endif %}
                             <h4 style="font-size: 1.1rem; font-weight: 600;">{{ task.title }}</h4>
                         </div>
                         {% if task.description %}

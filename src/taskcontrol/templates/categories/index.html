@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}Mis Categorías - TaskControl{% endblock %}
+
+{% block content %}
+<div class="categories-page">
+    <h2 style="margin-bottom: 1.5rem;">Mis Categorías</h2>
+
+    <!-- Formulario de Creación (HU-08) -->
+    <div class="form-card" style="max-width: 100%; margin: 0 0 2rem 0; padding: 1.5rem;">
+        <h3 style="margin-bottom: 1rem; font-size: 1.1rem;">Nueva Categoría</h3>
+        <form action="{{ url_for('categories.create_category_route') }}" method="POST">
+            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 1rem; margin-bottom: 1rem;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="name">Nombre * (máx. 50 caracteres)</label>
+                    <input type="text" id="name" name="name" class="form-control" required maxlength="50" placeholder="Ej. Trabajo">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="description">Descripción (opcional)</label>
+                    <input type="text" id="description" name="description" class="form-control" placeholder="Propósito de la categoría...">
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">Guardar Categoría</button>
+        </form>
+    </div>
+
+    <!-- Listado de Categorías -->
+    <div class="categories-list">
+        {% if categories %}
+            {% for category in categories %}
+                <div class="task-card">
+                    <div style="flex: 1;">
+                        <h4 style="font-size: 1.1rem; font-weight: 600;">{{ category.name }}</h4>
+                        {% if category.description %}
+                            <p style="color: var(--text-muted); font-size: 0.95rem;">{{ category.description }}</p>
+                        {% endif %}
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <a href="{{ url_for('tasks.list_tasks', category_id=category.id) }}" class="btn btn-secondary btn-sm">Ver Tareas</a>
+                        <form action="{{ url_for('categories.delete_category_route', category_id=category.id) }}" method="POST" class="inline-form" onsubmit="return confirm('¿Eliminar esta categoría? Las tareas asociadas ahora estarán sin categoría.');">
+                            <button type="submit" class="btn btn-secondary btn-sm">Eliminar</button>
+                        </form>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div style="text-align: center; padding: 3rem 1rem; background: var(--surface); border: 1px dashed var(--border); border-radius: var(--radius); color: var(--text-muted);">
+                <p style="font-size: 1.1rem;">No tienes categorías todavía.</p>
+                <p style="font-size: 0.9rem;">Crea una con el formulario superior para organizar tus tareas.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

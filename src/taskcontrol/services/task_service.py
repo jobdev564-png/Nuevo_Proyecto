@@ -38,6 +38,36 @@ class TaskService:
         "completed": set(),  # Bloqueada la reapertura en este incremento
     }
 
+    VALID_PRIORITIES = {"high", "medium", "low"}
+    DEFAULT_PRIORITY = "medium"
+
+    @classmethod
+    def _validate_priority(cls, priority: str):
+        if priority not in cls.VALID_PRIORITIES:
+            raise TaskValidationError(
+                "Prioridad inválida. Debe ser 'high', 'medium' o 'low'"
+            )
+
+    @classmethod
+    def _resolve_owned_category_id(cls, user_id: int, category_id=None):
+        """Valida pertenencia de la categoría al usuario o lanza error."""
+        from src.taskcontrol.models.category import Category
+
+        if category_id is None or str(category_id).strip() == "":
+            return None
+        try:
+            resolved = int(category_id)
+        except (TypeError, ValueError):
+            raise TaskValidationError(
+                "La categoría indicada no existe o no pertenece a su usuario."
+            )
+        category = Category.query.filter_by(id=resolved, user_id=user_id).first()
+        if category is None:
+            raise TaskValidationError(
+                "La categoría indicada no existe o no pertenece a su usuario."
+            )
+        return resolved
+
     @classmethod
     def create_task(
         cls,
@@ -45,6 +75,8 @@ class TaskService:
         title: str,
         description: str = None,
         due_date: date = None,
+        priority: str = None,
+        category_id=None,
     ) -> Task:
         """Crea una nueva tarea para el usuario y audita el evento."""
         if not title or not title.strip():
@@ -54,12 +86,22 @@ class TaskService:
         if len(clean_title) > 150:
             raise TaskValidationError("El título no puede exceder 150 caracteres")
 
+        if priority is None:
+            priority = cls.DEFAULT_PRIORITY
+        cls._validate_priority(priority)
+
+        resolved_category_id = cls._resolve_owned_category_id(
+            user_id=user_id, category_id=category_id
+        )
+
         task = Task(
             user_id=user_id,
             title=clean_title,
             description=description.strip() if description else None,
             due_date=due_date,
             status="pending",
+            priority=priority,
+            category_id=resolved_category_id,
             is_deleted=False,
             deleted_at=None,
         )
@@ -78,12 +120,110 @@ class TaskService:
         return task
 
     @classmethod
-    def get_user_tasks(cls, user_id: int, status: str = None):
-        """Lista las tareas vivas del usuario (excluye eliminación lógica, FR-003)."""
+    def get_user_tasks(
+        cls,
+        user_id: int,
+        status: str = None,
+        category_id=None,
+        sort_by: str = None,
+        order: str = "desc",
+    ):
+        """Lista las tareas vivas del usuario (excluye eliminación lógica, FR-003).
+
+        Filtros acumulativos (AND): status, category_id (entero o
+        "none"/"uncategorized" para sin categoría). Orden: sort_by="priority"
+        usa expresión CASE con desempate determinista; sin sort_by mantiene
+        el orden legado por creación descendente.
+        """
         query = Task.query.filter_by(user_id=user_id, is_deleted=False)
         if status in {"pending", "in_progress", "completed"}:
             query = query.filter_by(status=status)
-        return query.order_by(Task.created_at.desc()).all()
+        if category_id is not None:
+            if isinstance(category_id, str) and category_id in {
+                "none",
+                "uncategorized",
+            }:
+                query = query.filter(Task.category_id.is_(None))
+            else:
+                try:
+                    query = query.filter_by(category_id=int(category_id))
+                except (TypeError, ValueError):
+                    pass
+        if sort_by == "priority":
+            priority_order = db.case(
+                (Task.priority == "high", 1),
+                (Task.priority == "medium", 2),
+                (Task.priority == "low", 3),
+                else_=4,
+            )
+            # CASE numera urgencia (high=1); desc = Alta primero => ASC numérico.
+            if order == "asc":
+                query = query.order_by(
+                    priority_order.desc(), Task.due_date.asc(), Task.id.desc()
+                )
+            else:
+                query = query.order_by(
+                    priority_order.asc(), Task.due_date.asc(), Task.id.desc()
+                )
+        else:
+            query = query.order_by(Task.created_at.desc())
+        return query.all()
+
+    @classmethod
+    def update_task_priority(
+        cls, user_id: int, task_id: int, new_priority: str
+    ) -> Task:
+        """Modifica la prioridad de una tarea viva propia (HU-07, FR-004)."""
+        task = cls._get_owned_task_any_state(user_id=user_id, task_id=task_id)
+        cls._ensure_not_deleted(task)
+        cls._validate_priority(new_priority)
+
+        old_priority = task.priority
+        task.priority = new_priority
+        db.session.commit()
+
+        AuditService.log_event(
+            actor_id=user_id,
+            action="TASK_PRIORITY_CHANGED",
+            entity_id=task.id,
+            details={"old_priority": old_priority, "new_priority": new_priority},
+        )
+        db.session.commit()
+
+        return task
+
+    @classmethod
+    def update_task_category(
+        cls, user_id: int, task_id: int, category_id=None
+    ) -> Task:
+        """Asocia o desvincula la categoría de una tarea viva propia (HU-08).
+
+        category_id None/vacío → "sin categoría". Verifica que la categoría
+        pertenezca al mismo usuario (anti-IDOR, FR-012).
+        """
+        task = cls._get_owned_task_any_state(user_id=user_id, task_id=task_id)
+        cls._ensure_not_deleted(task)
+
+        new_category_id = cls._resolve_owned_category_id(
+            user_id=user_id, category_id=category_id
+        )
+
+        old_category_id = task.category_id
+        task.category_id = new_category_id
+        db.session.commit()
+
+        AuditService.log_event(
+            actor_id=user_id,
+            action="TASK_CATEGORY_CHANGED",
+            entity_id=task.id,
+            details={
+                "old_category_id": old_category_id,
+                "new_category_id": new_category_id,
+            },
+        )
+        db.session.commit()
+
+        return task
 
     @classmethod
     def get_task_by_id(cls, user_id: int, task_id: int) -> Task:

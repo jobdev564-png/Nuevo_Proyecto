@@ -22,6 +22,27 @@
             <textarea id="description" name="description" class="form-control" rows="3">{{ task.description or '' }}</textarea>
         </div>
 
+        <div class="form-group">
+            <label for="priority">Prioridad</label>
+            <select id="priority" name="priority" class="form-control">
+                <option value="high" {% if task.priority == 'high' %}selected{% endif %}>Alta</option>
+                <option value="medium" {% if task.priority == 'medium' or not task.priority %}selected{% endif %}>Media</option>
+                <option value="low" {% if task.priority == 'low' %}selected{% endif %}>Baja</option>
+            </select>
+        </div>
+
+        {% if categories is defined %}
+        <div class="form-group">
+            <label for="category_id">Categoría</label>
+            <select id="category_id" name="category_id" class="form-control">
+                <option value="" {% if not task.category_id %}selected{% endif %}>Sin categoría</option>
+                {% for cat in categories %}
+                    <option value="{{ cat.id }}" {% if task.category_id == cat.id %}selected{% endif %}>{{ cat.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.5rem;">
             <a href="{{ url_for('tasks.list_tasks') }}" class="btn btn-secondary">Cancelar</a>
             <button type="submit" class="btn btn-primary">Guardar Cambios</button>
