@@ -70,11 +70,14 @@
         <a href="{{ url_for('tasks.list_tasks', status=current_status, category_id=current_category_id, sort_by='priority', order='asc') }}" class="filter-btn {% if current_sort_by == 'priority' and current_order == 'asc' %}active{% endif %}">Prioridad (Menor a Mayor)</a>
     </div>
 
+    <!-- Región de mensajes de la interacción dinámica (HU-15/HU-16, JS) -->
+    <div id="js-flash" aria-live="polite"></div>
+
     <!-- Listado de Tareas (HU-02) -->
-    <div class="tasks-list">
+    <div class="tasks-list" data-task-list>
         {% if tasks %}
             {% for task in tasks %}
-                <div class="task-card">
+                <div class="task-card" data-task-id="{{ task.id }}" data-status="{{ task.status }}" data-sort-order="{{ task.sort_order }}" draggable="true">
                     <div style="flex: 1;">
                         <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
                             <span class="badge badge-{{ task.status }}">
@@ -120,7 +123,7 @@
                             </form>
                             <form action="{{ url_for('tasks.update_status_route', task_id=task.id) }}" method="POST" class="inline-form">
                                 <input type="hidden" name="status" value="completed">
-                                <button type="submit" class="btn btn-primary btn-sm">Completar</button>
+                                <button type="submit" class="btn btn-primary btn-sm js-complete-btn" data-task-id="{{ task.id }}">Completar</button>
                             </form>
                         {% elif task.status == 'in_progress' %}
                             <form action="{{ url_for('tasks.update_status_route', task_id=task.id) }}" method="POST" class="inline-form">
@@ -129,7 +132,7 @@
                             </form>
                             <form action="{{ url_for('tasks.update_status_route', task_id=task.id) }}" method="POST" class="inline-form">
                                 <input type="hidden" name="status" value="completed">
-                                <button type="submit" class="btn btn-primary btn-sm">Completar</button>
+                                <button type="submit" class="btn btn-primary btn-sm js-complete-btn" data-task-id="{{ task.id }}">Completar</button>
                             </form>
                         {% elif task.status == 'completed' %}
                             <form action="{{ url_for('tasks.reopen_task_route', task_id=task.id) }}" method="POST" class="inline-form">
@@ -138,6 +141,9 @@
                         {% endif %}
 
                         <a href="{{ url_for('tasks.edit_task_route', task_id=task.id) }}" class="btn btn-secondary btn-sm">Editar</a>
+                        <!-- Reordenamiento accesible por teclado (HU-16, alternativa al arrastre) -->
+                        <button type="button" class="btn btn-secondary btn-sm js-move-btn" data-task-id="{{ task.id }}" data-direction="up" aria-label="Subir tarea {{ task.title }}">↑</button>
+                        <button type="button" class="btn btn-secondary btn-sm js-move-btn" data-task-id="{{ task.id }}" data-direction="down" aria-label="Bajar tarea {{ task.title }}">↓</button>
                         <form action="{{ url_for('tasks.delete_task_route', task_id=task.id) }}" method="POST" class="inline-form" onsubmit="return confirm('¿Eliminar esta tarea? Desaparecerá de tu listado.');">
                             <button type="submit" class="btn btn-secondary btn-sm">Eliminar</button>
                         </form>

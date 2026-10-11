@@ -23,6 +23,9 @@ class Task(db.Model):
     description = db.Column(db.Text, nullable=True)
     due_date = db.Column(db.Date, nullable=True)
     status = db.Column(db.String(20), nullable=False, default="pending")
+    # Orden manual persistente del propietario (HU-16, Inc.5): denso 0..N-1
+    # dentro de cada vista; las tareas nuevas van al final (max+1).
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
     priority = db.Column(
         db.String(10), nullable=False, default="medium", server_default="medium"
     )
@@ -61,6 +64,7 @@ class Task(db.Model):
             "description": self.description,
             "due_date": self.due_date.isoformat() if self.due_date else None,
             "status": self.status,
+            "sort_order": self.sort_order,
             "priority": self.priority,
             "category_id": self.category_id,
             "category_name": self.category.name if self.category else None,

@@ -51,3 +51,8 @@ env/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Universal
+.DS_Store
+Thumbs.db
+*.tmp

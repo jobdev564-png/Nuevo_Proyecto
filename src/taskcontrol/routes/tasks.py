@@ -13,6 +13,7 @@ from src.taskcontrol.routes.auth_helpers import login_required
 from src.taskcontrol.services.task_service import (
     TaskService,
     TaskValidationError,
+    ReorderValidationError,
     TaskNotFoundError,
     TaskAlreadyDeletedError,
     TaskDeletedError,
@@ -330,6 +331,82 @@ def create_task_route():
 
         flash(str(e), "error")
         return redirect(url_for("tasks.list_tasks"))
+
+
+@tasks_bp.route("/reorder", methods=["POST", "PATCH"])
+@login_required
+def reorder_tasks_route():
+    """Persistencia del orden manual de la vista actual (HU-16).
+
+    Recibe la lista ordenada de ids de la vista filtrada actual y la
+    persiste atómicamente para el usuario autenticado. Ante 4xx/5xx o
+    fallo de red el cliente revierte al orden anterior confirmado (FR-010).
+    """
+    user_id = session["user_id"]
+    payload = request.get_json(silent=True)
+    if payload is not None:
+        ordered_ids = payload.get("ordered_ids")
+        view = payload.get("view") or "all"
+    else:
+        form_ids = request.form.getlist("ordered_ids")
+        if len(form_ids) == 1 and "," in form_ids[0]:
+            ordered_ids = [v.strip() for v in form_ids[0].split(",") if v.strip()]
+        else:
+            ordered_ids = form_ids or None
+        view = request.form.get("view") or "all"
+
+    try:
+        TaskService.reorder_tasks(
+            user_id=user_id, ordered_ids=ordered_ids, view=view
+        )
+
+        if _is_json_request():
+            return (
+                jsonify(
+                    {
+                        "status": "success",
+                        "message": "Orden actualizado correctamente",
+                        "data": {
+                            "ordered_ids": [int(i) for i in ordered_ids],
+                            "view": view,
+                        },
+                    }
+                ),
+                200,
+            )
+
+        flash("Orden actualizado correctamente.", "success")
+        return redirect(url_for("tasks.list_tasks"))
+
+    except ReorderValidationError as e:
+        if _is_json_request():
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "code": e.code,
+                        "message": str(e),
+                    }
+                ),
+                400,
+            )
+        flash(str(e), "error")
+        return redirect(url_for("tasks.list_tasks")), 400
+
+    except (TaskNotFoundError, TaskDeletedError):
+        if _is_json_request():
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "code": "TASK_NOT_FOUND",
+                        "message": "Tarea no encontrada",
+                    }
+                ),
+                404,
+            )
+        flash("Tarea no encontrada.", "error")
+        return redirect(url_for("tasks.list_tasks")), 404
 
 
 @tasks_bp.route("/<int:task_id>/status", methods=["POST", "PATCH"])

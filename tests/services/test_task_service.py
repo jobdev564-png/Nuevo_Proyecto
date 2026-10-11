@@ -365,3 +365,133 @@ def test_never_overdue_when_deleted(app, test_user_id):
         )
         TaskService.delete_task(user_id=test_user_id, task_id=task.id)
         assert task.is_overdue is False
+
+
+# --- Incremento 5: Orden persistente (HU-16, fundación, T008) ---
+
+def test_new_tasks_get_dense_sort_order_at_end(app, test_user_id):
+    """Tareas nuevas reciben sort_order denso al final: 0, 1, 2... (FR-011)."""
+    with app.app_context():
+        t1 = TaskService.create_task(user_id=test_user_id, title="Primera")
+        t2 = TaskService.create_task(user_id=test_user_id, title="Segunda")
+        t3 = TaskService.create_task(user_id=test_user_id, title="Tercera")
+        assert (t1.sort_order, t2.sort_order, t3.sort_order) == (0, 1, 2)
+
+
+def test_get_user_tasks_ordered_by_sort_order(app, test_user_id):
+    """El listado por defecto ordena sort_order ASC, id ASC (data-model.md)."""
+    with app.app_context():
+        from src.taskcontrol.extensions import db
+
+        t1 = TaskService.create_task(user_id=test_user_id, title="Una")
+        t2 = TaskService.create_task(user_id=test_user_id, title="Dos")
+        t3 = TaskService.create_task(user_id=test_user_id, title="Tres")
+        t3.sort_order, t1.sort_order, t2.sort_order = 0, 1, 2
+        db.session.commit()
+        tasks = TaskService.get_user_tasks(user_id=test_user_id)
+        assert [t.id for t in tasks] == [t3.id, t1.id, t2.id]
+
+
+# --- Incremento 5 US1: Salto directo a completada (HU-15, T010) ---
+
+def test_direct_jump_pending_to_completed(app, test_user_id):
+    """Salto directo pending→completed en un gesto (aclaración 2026-10-11)."""
+    with app.app_context():
+        task = TaskService.create_task(user_id=test_user_id, title="Directa")
+        done = TaskService.update_task_status(
+            user_id=test_user_id, task_id=task.id, new_status="completed"
+        )
+        assert done.status == "completed"
+        audit = AuditLog.query.filter_by(
+            action="STATUS_CHANGED", entity_id=task.id
+        ).first()
+        assert audit is not None
+
+
+def test_direct_jump_in_progress_to_completed(app, test_user_id):
+    """Salto directo in_progress→completed en un gesto (HU-15)."""
+    with app.app_context():
+        task = TaskService.create_task(user_id=test_user_id, title="En curso")
+        TaskService.update_task_status(
+            user_id=test_user_id, task_id=task.id, new_status="in_progress"
+        )
+        done = TaskService.update_task_status(
+            user_id=test_user_id, task_id=task.id, new_status="completed"
+        )
+        assert done.status == "completed"
+
+
+# --- Incremento 5 US2: Reordenamiento manual (HU-16, T017/T018) ---
+
+def test_reorder_tasks_persists_dense_order(app, test_user_id):
+    """POST reorder persiste renumeración densa 0..N-1 en el orden recibido."""
+    with app.app_context():
+        t1 = TaskService.create_task(user_id=test_user_id, title="A")
+        t2 = TaskService.create_task(user_id=test_user_id, title="B")
+        t3 = TaskService.create_task(user_id=test_user_id, title="C")
+        TaskService.reorder_tasks(
+            user_id=test_user_id, ordered_ids=[t3.id, t1.id, t2.id]
+        )
+        tasks = TaskService.get_user_tasks(user_id=test_user_id)
+        assert [t.id for t in tasks] == [t3.id, t1.id, t2.id]
+        assert [t.sort_order for t in tasks] == [0, 1, 2]
+        audit = AuditLog.query.filter_by(action="TASK_ORDER_CHANGED").first()
+        assert audit is not None
+        assert audit.actor_id == test_user_id
+
+
+def test_reorder_tasks_is_scoped_to_view(app, test_user_id):
+    """El reorden con view solo renumera esa vista; el resto conserva valor."""
+    with app.app_context():
+        from src.taskcontrol.extensions import db
+
+        a = TaskService.create_task(user_id=test_user_id, title="PA")
+        b = TaskService.create_task(user_id=test_user_id, title="PB")
+        done = TaskService.create_task(user_id=test_user_id, title="Done")
+        TaskService.update_task_status(
+            user_id=test_user_id, task_id=done.id, new_status="completed"
+        )
+        done_before = done.sort_order
+        TaskService.reorder_tasks(
+            user_id=test_user_id, ordered_ids=[b.id, a.id], view="pending"
+        )
+        db.session.refresh(a)
+        db.session.refresh(b)
+        db.session.refresh(done)
+        assert (a.sort_order, b.sort_order) == (1, 0)
+        assert done.sort_order == done_before
+
+
+def test_reorder_tasks_rejects_foreign_batch_atomically(
+    app, test_user_id, second_user_id
+):
+    """Lote con id ajeno rechaza íntegro (404 neutro) sin escribir nada."""
+    with app.app_context():
+        from src.taskcontrol.extensions import db
+
+        mine = TaskService.create_task(user_id=test_user_id, title="Mía")
+        alien = TaskService.create_task(user_id=second_user_id, title="Ajena")
+        before = mine.sort_order
+        with pytest.raises(TaskNotFoundError):
+            TaskService.reorder_tasks(
+                user_id=test_user_id, ordered_ids=[mine.id, alien.id]
+            )
+        db.session.refresh(mine)
+        assert mine.sort_order == before
+
+
+def test_reorder_tasks_rejects_duplicates_and_incomplete(app, test_user_id):
+    """Duplicados e incompletos → TaskValidationError sin escritura parcial."""
+    with app.app_context():
+        t1 = TaskService.create_task(user_id=test_user_id, title="X")
+        t2 = TaskService.create_task(user_id=test_user_id, title="Y")
+        with pytest.raises(TaskValidationError):
+            TaskService.reorder_tasks(
+                user_id=test_user_id, ordered_ids=[t1.id, t1.id]
+            )
+        with pytest.raises(TaskValidationError):
+            TaskService.reorder_tasks(user_id=test_user_id, ordered_ids=[t1.id])
+        with pytest.raises(TaskValidationError):
+            TaskService.reorder_tasks(user_id=test_user_id, ordered_ids=[])
+        tasks = TaskService.get_user_tasks(user_id=test_user_id)
+        assert [t.sort_order for t in tasks] == [0, 1]

@@ -360,3 +360,133 @@ def test_list_backward_compatible_without_new_params(client):
     tasks = resp.get_json()["data"]["tasks"]
     assert len(tasks) == 1
     assert tasks[0]["priority"] == "medium"
+
+
+# --- Incremento 5 US1: Contrato fetch de completado (HU-15, T011) ---
+
+def test_status_direct_jump_via_fetch_contract(client):
+    """POST /tasks/<id>/status con JSON {"status": "completed"}: salto directo + envoltorio."""
+    _login_as(client, "fetchjump@example.com")
+
+    res = client.post(
+        "/tasks",
+        json={"title": "Tarea Fetch"},
+        headers={"Accept": "application/json"},
+    )
+    task_id = res.get_json()["data"]["id"]
+
+    # Salto directo pending -> completed vía fetch JSON
+    resp = client.post(
+        f"/tasks/{task_id}/status",
+        json={"status": "completed"},
+        headers={"Accept": "application/json"},
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["status"] == "success"
+    assert body["data"]["current_status"] == "completed"
+
+    # Idempotencia: completar una tarea ya completada no produce cambio válido
+    again = client.post(
+        f"/tasks/{task_id}/status",
+        json={"status": "completed"},
+        headers={"Accept": "application/json"},
+    )
+    assert again.status_code == 400
+    assert again.get_json()["code"] == "INVALID_STATE_TRANSITION"
+
+
+def test_status_foreign_task_returns_neutral_404(client):
+    """Tarea ajena → 404 neutro TASK_NOT_FOUND (sin revelar propiedad)."""
+    _login_as(client, "owner5@example.com")
+    res = client.post(
+        "/tasks",
+        json={"title": "Tarea Ajena"},
+        headers={"Accept": "application/json"},
+    )
+    foreign_id = res.get_json()["data"]["id"]
+
+    other = client.__class__(client.application)
+    _login_as(other, "intruder5@example.com")
+    resp = other.post(
+        f"/tasks/{foreign_id}/status",
+        json={"status": "completed"},
+        headers={"Accept": "application/json"},
+    )
+    assert resp.status_code == 404
+    assert resp.get_json()["code"] == "TASK_NOT_FOUND"
+
+
+# --- Incremento 5 US2: Contrato POST /tasks/reorder (HU-16, T019) ---
+
+def _reorder_seed(client, email="reorder@example.com"):
+    _login_as(client, email)
+    ids = []
+    for title in ["R1", "R2", "R3"]:
+        res = client.post(
+            "/tasks",
+            json={"title": title},
+            headers={"Accept": "application/json"},
+        )
+        ids.append(res.get_json()["data"]["id"])
+    return ids
+
+
+def test_reorder_route_persists_and_audits(client):
+    """POST /tasks/reorder → 200 con envoltorio y orden persistido tras recarga."""
+    ids = _reorder_seed(client)
+    new_order = [ids[2], ids[0], ids[1]]
+    resp = client.post(
+        "/tasks/reorder",
+        json={"ordered_ids": new_order, "view": "all"},
+        headers={"Accept": "application/json"},
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["status"] == "success"
+    assert body["data"]["ordered_ids"] == new_order
+
+    listing = client.get("/tasks", headers={"Accept": "application/json"})
+    assert [t["id"] for t in listing.get_json()["data"]["tasks"]] == new_order
+
+
+def test_reorder_route_rejects_bad_payload_and_requires_session(client):
+    """Lote vacío/duplicado → 400; sin sesión → 401."""
+    ids = _reorder_seed(client, "reorder2@example.com")
+
+    empty = client.post(
+        "/tasks/reorder",
+        json={"ordered_ids": []},
+        headers={"Accept": "application/json"},
+    )
+    assert empty.status_code == 400
+
+    dupe = client.post(
+        "/tasks/reorder",
+        json={"ordered_ids": [ids[0], ids[0]]},
+        headers={"Accept": "application/json"},
+    )
+    assert dupe.status_code == 400
+
+    anon = client.__class__(client.application)
+    nosess = anon.post(
+        "/tasks/reorder",
+        json={"ordered_ids": ids},
+        headers={"Accept": "application/json"},
+    )
+    assert nosess.status_code == 401
+    assert nosess.get_json()["code"] == "UNAUTHORIZED"
+
+
+def test_reorder_route_foreign_id_is_neutral_404(client):
+    """Id de otro usuario → 404 TASK_NOT_FOUND neutro."""
+    ids = _reorder_seed(client, "reorder3@example.com")
+    other = client.__class__(client.application)
+    foreign = _reorder_seed(other, "reorder4@example.com")
+    resp = client.post(
+        "/tasks/reorder",
+        json={"ordered_ids": ids + [foreign[0]]},
+        headers={"Accept": "application/json"},
+    )
+    assert resp.status_code == 404
+    assert resp.get_json()["code"] == "TASK_NOT_FOUND"

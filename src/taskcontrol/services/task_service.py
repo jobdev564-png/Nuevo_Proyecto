@@ -29,6 +29,14 @@ class TaskDeletedError(Exception):
     pass
 
 
+class ReorderValidationError(TaskValidationError):
+    """Lote de reordenamiento inválido (HU-16): porta el código de contrato."""
+
+    def __init__(self, message, code="VALIDATION_ERROR"):
+        super().__init__(message)
+        self.code = code
+
+
 class UserNotFoundError(Exception):
     """El correo destinatario no corresponde a ningún usuario registrado (HU-10)."""
     pass
@@ -104,6 +112,16 @@ class TaskService:
             user_id=user_id, category_id=category_id
         )
 
+        # Orden manual persistente (HU-16, FR-011): la tarea nueva va al final.
+        from sqlalchemy import func as _func
+
+        max_position = (
+            db.session.query(_func.max(Task.sort_order))
+            .filter_by(user_id=user_id)
+            .scalar()
+        )
+        next_position = (max_position + 1) if max_position is not None else 0
+
         task = Task(
             user_id=user_id,
             created_by=user_id,
@@ -113,6 +131,7 @@ class TaskService:
             status="pending",
             priority=priority,
             category_id=resolved_category_id,
+            sort_order=next_position,
             is_deleted=False,
             deleted_at=None,
         )
@@ -186,7 +205,9 @@ class TaskService:
                     priority_order.asc(), Task.due_date.asc(), Task.id.desc()
                 )
         else:
-            query = query.order_by(Task.created_at.desc())
+            # Orden manual persistente del propietario (HU-16, FR-011):
+            # sort_order ASC con desempate determinista por id.
+            query = query.order_by(Task.sort_order.asc(), Task.id.asc())
         return query.all()
 
     @classmethod
@@ -244,6 +265,80 @@ class TaskService:
         db.session.commit()
 
         return task
+
+    @classmethod
+    def reorder_tasks(cls, user_id: int, ordered_ids: list, view: str = None):
+        """Persiste el orden manual de una vista del listado (HU-16, FR-008).
+
+        Renumera densamente ``sort_order = 0..N-1`` en el orden recibido, en
+        una única transacción atómica; las tareas del usuario fuera de la
+        vista declarada conservan su valor. Cada persistencia aceptada emite
+        ``TASK_ORDER_CHANGED`` (FR-012). Toda la validación ocurre antes de
+        escribir nada: cualquier id inexistente, eliminado o ajeno aborta el
+        lote íntegro con ``TaskNotFoundError`` (404 neutro); duplicados,
+        vacíos o conjuntos incompletos abortan con ``ReorderValidationError``.
+        ``view``: None/"all" o uno de pending/in_progress/completed.
+        """
+        if not isinstance(ordered_ids, list) or len(ordered_ids) == 0:
+            raise ReorderValidationError(
+                "La lista ordenada es obligatoria y no puede estar vacía"
+            )
+        try:
+            normalized = [int(task_id) for task_id in ordered_ids]
+        except (TypeError, ValueError):
+            raise ReorderValidationError(
+                "La lista ordenada contiene identificadores inválidos"
+            )
+        if len(set(normalized)) != len(normalized):
+            raise ReorderValidationError(
+                "La lista ordenada contiene tareas duplicadas",
+                code="ORDER_DUPLICATE",
+            )
+
+        statuses = {"pending", "in_progress", "completed"}
+        status_filter = view if view in statuses else None
+
+        query = Task.query.filter_by(user_id=user_id, is_deleted=False)
+        if status_filter is not None:
+            query = query.filter_by(status=status_filter)
+        view_tasks = query.all()
+        view_ids = {task.id for task in view_tasks}
+
+        # 1. Existencia/propiedad/vigencia por tarea (neutro, sin distinguir).
+        alive_owned = {
+            task.id
+            for task in Task.query.filter_by(
+                user_id=user_id, is_deleted=False
+            ).all()
+        }
+        for task_id in normalized:
+            if task_id not in alive_owned:
+                raise TaskNotFoundError("Tarea no encontrada")
+
+        # 2. Coincidencia exacta con la vista declarada.
+        if set(normalized) != view_ids:
+            raise ReorderValidationError(
+                "La lista no coincide con las tareas de la vista actual",
+                code="ORDER_INCOMPLETE",
+            )
+
+        # 3. Escritura atómica + auditoría por persistencia.
+        try:
+            position_by_id = {task_id: pos for pos, task_id in enumerate(normalized)}
+            for task in view_tasks:
+                task.sort_order = position_by_id[task.id]
+            AuditService.log_event(
+                actor_id=user_id,
+                action="TASK_ORDER_CHANGED",
+                entity_id=user_id,
+                details={"ordered_ids": normalized, "view": view or "all"},
+            )
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            raise
+
+        return view_tasks
 
     @classmethod
     def get_task_by_id(cls, user_id: int, task_id: int) -> Task:
