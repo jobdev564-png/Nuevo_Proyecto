@@ -1,0 +1,138 @@
+RESPUESTAS POR INCREMENTO — CLARIFY, DESVIACIONES Y EVIDENCIA
+Proyecto TaskControl | Fecha: 2026-10-11 | Autor: agente (sesión inc5)
+Fuentes: specs/001..005 (spec/plan/research), suite pytest (149 passed),
+evidence/*.log, git log. Lo observado de primera mano se marca [EN VIVO];
+lo reconstruido desde artefactos se marca [ARTEFACTO].
+
+================================================================
+INCREMENTO 1 — 001-basic-tasks-auth (HU-01..04, HU-12/13)
+================================================================
+1) Preguntas de /speckit-clarify: SIN REGISTRO en los artefactos del
+   incremento (spec.md no contiene sección de sesiones Q&A). Posible que
+   se ejecutara sin guardar la sesión; no se puede afirmar ni reconstruir
+   qué se preguntó. [ARTEFACTO]
+2) Desviación evitada en planificación (detector: revisión de
+   constitución documentada en research.md:23-25): se evaluó usar
+   microservicios y controladores con acceso directo a BD; ambas se
+   RECHAZARON por los Principios I (monolito) y II (capas). Corrección:
+   Flask monolítico + TaskService sin contexto HTTP. Sin esa revisión,
+   el incremento habría nacido violando la constitución.
+3) Caso límite resuelto hacia 404 neutro (spec §escenarios + FR):
+   acceso a tarea ajena responde 404 (no 403) para no revelar existencia
+   (Principio VII, anti-enumeración). Verificado en tests de aislamiento
+   (evidence/pytest-inc1-verde.log, 13 passed).
+
+================================================================
+INCREMENTO 2 — 002-task-lifecycle-recovery (HU-05/06/14, reset)
+================================================================
+1) Preguntas de /speckit-clarify: SIN REGISTRO en los artefactos. [ARTEFACTO]
+2) Desviación evitada (detector: revisión de diseño en research.md:43):
+   reutilizar POST /tasks/<id>/status con status=pending para reabrir
+   habría hecho indistinguible una reapertura de una pausa en logs y
+   contratos (violaba FR-009). Corrección: endpoint dedicado /reopen +
+   TASK_REOPENED; update_task_status sigue bloqueando completed→*.
+   También se rechazaron status='deleted' (contaminaba la máquina de
+   estados) y tabla Trash separada (YAGNI, rompía FKs) → eliminación
+   lógica con is_deleted. Evidencia: test_task_reopen.py y
+   test_task_soft_delete.py en verde (evidence/pytest-inc2-verde.log,
+   34 passed).
+3) Sin desvíos en implementación que consten; confianza justificada en:
+   plan con Constitution Check I–VIII en PASS, research con alternativas
+   rechazadas por escrito y 34 pruebas verdes cubriendo transiciones,
+   reapertura, borrado y reset.
+
+================================================================
+INCREMENTO 3 — 003-task-organization-priority (HU-07/08/09)
+================================================================
+1) Preguntas de /speckit-clarify: SIN REGISTRO en los artefactos. [ARTEFACTO]
+2) Desviación evitada (detector: revisión documentada en
+   research.md:109-111): persistir is_overdue como columna habría quedado
+   inconsistente cada medianoche sin un worker externo; calcularlo en
+   JavaScript habría dado bugs de zona horaria (Principios VII/III).
+   Corrección: propiedad calculada solo en backend con la regla exacta
+   (due_date pasada + no completada + no eliminada). Evidencia: tests
+   test_overdue_* en verde (evidence/pytest-inc3-verde.log, 14 passed).
+   También rechazadas: prioridad numérica 1/2/3 (constantes mágicas),
+   db.Enum nativo (Alembic+SQLite) y categorías M:N o globales (YAGNI y
+   aislamiento por usuario).
+3) DESVIACIÓN NO CORREGIDA, detectada [EN VIVO] en revisión manual
+   durante el incremento 5: list_tasks() en
+   src/taskcontrol/routes/tasks.py (líneas ~96-119) contiene un bloque
+   duplicado e inalcanzable (segundo if _is_json_request + segundo
+   render_template tras el return). Atribución por git: introducido en
+   9923f08 (este incremento 3) y arrastrado al 4. Sin impacto funcional
+   (inaccesible, suite en verde), se difirió por fuera de alcance del
+   incremento 5. Corrección propuesta: eliminar el bloque muerto.
+
+================================================================
+INCREMENTO 4 — 004-task-assignment-notifications (HU-10/11)
+================================================================
+1) Preguntas de /speckit-clarify: SIN REGISTRO en los artefactos. [ARTEFACTO]
+2) Desviación evitada (detector: revisión en research.md:16): modelo de
+   doble FK (owner_id + assignee_id con listado por OR) habría duplicado
+   las guardas de autorización y roto get_task_by_id sin requisito del
+   backlog (YAGNI, Principio V). Corrección: transferencia de user_id +
+   created_by inmutable + TASK_ASSIGNED y Notification en una sola
+   transacción con rollback total. Evidencia: tests de asignación y
+   notificaciones en verde (evidence/pytest-inc4-verde.log, 37 passed),
+   incluido "fallo no crea notificación huérfana".
+3) Sin desvíos de implementación que consten; confianza justificada en:
+   atomicidad verificada por tests (rechazo íntegro ante email inválido,
+   auto-asignación y tarea ajena) y 404 neutro ante intrusos.
+
+================================================================
+INCREMENTO 5 — 005-frontend-task-interactions (HU-15/16) [EN VIVO]
+================================================================
+1) /speckit-clarify — sesión 2026-10-11 registrada en spec.md (5 Q&A):
+   Q1 Transiciones del gesto rápido → R: salto directo
+   pendiente→completada y en progreso→completada. Por qué: el contrato
+   Inc.1 ya permitía pending→completed, así que no exigía cambio backend.
+   Q2 Orden manual vs filtros/prioridad → R: orden por vista (cada vista
+   filtrada conserva el suyo). Por qué: evita que reordenar "pendientes"
+   corrompa el orden de "completadas" u otras vistas.
+   Q3 Alternativa sin arrastre → R: botones subir/bajar por fila
+   operables por teclado. Por qué: accesibilidad sin librerías, dentro
+   de la restricción vanilla-JS de la constitución.
+   Q4 Tareas nuevas y completadas → R: nuevas al final, completadas
+   conservan posición. Por qué: regla determinista que no rompe el orden
+   guardado del usuario.
+   Q5 Auditoría del orden → R: sí, cada persistencia genera registro.
+   Por qué: Principio VIII (toda mutación auditable).
+   (Motivaciones reconstruidas desde spec/constitución; la sesión es
+   previa a este agente.)
+2) DESVIACIÓN 1 — spec vs plan (detector: /speckit-analyze hallazgo I1
+   HIGH + checklist CHK010): el spec decía "ningún endpoint nuevo" pero
+   persistir el orden exige escritura; sobrecargar /status pervertiría su
+   semántica. Corrección: endpoint mínimo POST /tasks/reorder con
+   contrato explícito (Principio III), desviación justificada en plan +
+   research R-03. Pendiente: enmendar la frase del spec.
+   DESVIACIÓN 2 — test fundacional T008 invocaba reorder_tasks() (de
+   US2), invirtiendo fases (detector: análisis de orden + rojo). Correc-
+   ción: reescrito para fijar sort_order directamente.
+   DESVIACIÓN 3 — handler JS de drop persistía siempre (|| true),
+   generando auditoría por sueltas sin cambio (detector: autorevisión).
+   Corrección: instantánea dragPrevious + comparar; persistir solo si
+   hubo cambio.
+   Evidencia roja→verde: evidence/pytest-inc5-rojo.log (9 failed sobre
+   código 4ba6b11) → evidence/pytest-inc5-verde.log (13 passed) +
+   suite total 149 passed.
+3) Sin más desvíos; confianza justificada en: TDD rojo-verde observado,
+   analyze sin hallazgos CRITICAL, Constitution Check I–VIII en PASS y
+   protocolos manuales Q-1..Q-4 verificados a nivel de contrato
+   (persistencia tras recarga, aislamiento entre usuarios, reversión
+   ante fallo, 401/404/400 con envoltorio).
+
+================================================================
+NOTA SOBRE CAPTURAS DE PANTALLA
+================================================================
+Este agente opera en un contenedor Linux sin pantalla ni navegador, por
+lo que NO puede tomar capturas. Evidencia verificable entregada en su
+lugar: evidence/*.log (transcripciones íntegras de pytest -v),
+migración aplicada (flask db upgrade → head d6e7f8a9b0c1) y servidor
+verificado (GET / → 200 "Iniciar Sesión - TaskControl").
+Para capturas manuales, con `flask run` activo:
+ (a) listado con 5 tareas y panel Network mostrando POST /tasks/<id>/
+     status → 200 sin recarga; (b) fila revertida + mensaje tras cortar
+     la red (Q-3); (c) arrastre con POST /tasks/reorder → 200 y mismo
+     orden tras recargar (Q-2); (d) PowerShell con `pytest -v` en verde.
+Guía paso a paso: specs/005-frontend-task-interactions/quickstart.md.
