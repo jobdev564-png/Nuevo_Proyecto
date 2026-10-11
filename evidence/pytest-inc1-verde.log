@@ -1,0 +1,21 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.5, pytest-9.1.1, pluggy-1.6.0 -- /home/Sebastian/Programming/spec-driven-development/Nuevo_Proyecto/.venv/bin/python
+rootdir: /home/Sebastian/Programming/spec-driven-development/Nuevo_Proyecto
+plugins: flask-1.3.0
+collecting ... collected 13 items
+
+tests/services/test_user_service.py::test_register_user_success PASSED   [  7%]
+tests/services/test_user_service.py::test_register_user_duplicate_email PASSED [ 15%]
+tests/services/test_user_service.py::test_register_user_invalid_email PASSED [ 23%]
+tests/services/test_user_service.py::test_register_user_short_password PASSED [ 30%]
+tests/services/test_user_service.py::test_authenticate_user_success PASSED [ 38%]
+tests/services/test_user_service.py::test_authenticate_user_wrong_password PASSED [ 46%]
+tests/services/test_user_service.py::test_authenticate_user_nonexistent_email PASSED [ 53%]
+tests/functional/test_auth_routes.py::test_register_route_success PASSED [ 61%]
+tests/functional/test_auth_routes.py::test_register_route_duplicate_email PASSED [ 69%]
+tests/functional/test_auth_routes.py::test_register_route_validation_error PASSED [ 76%]
+tests/functional/test_auth_routes.py::test_login_route_success PASSED    [ 84%]
+tests/functional/test_auth_routes.py::test_login_route_invalid_credentials PASSED [ 92%]
+tests/functional/test_auth_routes.py::test_logout_route PASSED           [100%]
+
+============================== 13 passed in 6.69s ==============================

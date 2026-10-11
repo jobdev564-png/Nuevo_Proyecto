@@ -1,0 +1,45 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.5, pytest-9.1.1, pluggy-1.6.0 -- /home/Sebastian/Programming/spec-driven-development/Nuevo_Proyecto/.venv/bin/python
+rootdir: /home/Sebastian/Programming/spec-driven-development/Nuevo_Proyecto
+plugins: flask-1.3.0
+collecting ... collected 37 items
+
+tests/services/test_task_assignment_service.py::test_assign_transfers_ownership_and_keeps_creator PASSED [  2%]
+tests/services/test_task_assignment_service.py::test_assignee_lists_task_assignor_no_longer_does PASSED [  5%]
+tests/services/test_task_assignment_service.py::test_origin_filter_classifies_mine_assigned_all PASSED [  8%]
+tests/services/test_task_assignment_service.py::test_assign_to_unregistered_email_rejected_without_side_effects PASSED [ 10%]
+tests/services/test_task_assignment_service.py::test_assign_foreign_task_rejected PASSED [ 13%]
+tests/services/test_task_assignment_service.py::test_assign_deleted_task_rejected PASSED [ 16%]
+tests/services/test_task_assignment_service.py::test_assign_to_self_rejected_without_side_effects PASSED [ 18%]
+tests/services/test_task_assignment_service.py::test_assign_invalid_email_format_rejected PASSED [ 21%]
+tests/services/test_task_assignment_service.py::test_assign_normalizes_email_case_and_spaces PASSED [ 24%]
+tests/services/test_task_assignment_service.py::test_successful_assign_emits_single_audit_with_required_fields PASSED [ 27%]
+tests/services/test_task_assignment_service.py::test_successful_assign_creates_exactly_one_notification PASSED [ 29%]
+tests/services/test_task_assignment_service.py::test_reassign_by_current_owner_transfers_again PASSED [ 32%]
+tests/services/test_task_assignment_service.py::test_atomicity_failure_leaves_no_partial_effects PASSED [ 35%]
+tests/services/test_notification_service.py::test_list_returns_only_recipient_notifications PASSED [ 37%]
+tests/services/test_notification_service.py::test_unread_count_tracks_pending PASSED [ 40%]
+tests/services/test_notification_service.py::test_mark_read_persists_history_as_read PASSED [ 43%]
+tests/services/test_notification_service.py::test_mark_read_idempotent PASSED [ 45%]
+tests/services/test_notification_service.py::test_mark_all_read_marks_batch_and_returns_count PASSED [ 48%]
+tests/services/test_notification_service.py::test_mark_foreign_notification_raises_not_found PASSED [ 51%]
+tests/services/test_notification_service.py::test_mark_nonexistent_notification_raises_not_found PASSED [ 54%]
+tests/services/test_notification_service.py::test_orphan_notification_survives_task_soft_delete PASSED [ 56%]
+tests/services/test_notification_service.py::test_failed_assignment_creates_no_notification PASSED [ 59%]
+tests/functional/test_assignment_routes.py::test_assign_requires_session PASSED [ 62%]
+tests/functional/test_assignment_routes.py::test_assign_success_json PASSED [ 64%]
+tests/functional/test_assignment_routes.py::test_assign_success_html_redirects PASSED [ 67%]
+tests/functional/test_assignment_routes.py::test_assign_unregistered_email_404 PASSED [ 70%]
+tests/functional/test_assignment_routes.py::test_assign_foreign_or_deleted_404 PASSED [ 72%]
+tests/functional/test_assignment_routes.py::test_assign_to_self_400 PASSED [ 75%]
+tests/functional/test_assignment_routes.py::test_assign_invalid_email_400 PASSED [ 78%]
+tests/functional/test_assignment_routes.py::test_tasks_origin_filter_and_compatibility PASSED [ 81%]
+tests/functional/test_assignment_routes.py::test_assignee_item_exposes_assignment_fields PASSED [ 83%]
+tests/functional/test_notification_routes.py::test_notifications_require_session PASSED [ 86%]
+tests/functional/test_notification_routes.py::test_list_notifications_with_unread_count PASSED [ 89%]
+tests/functional/test_notification_routes.py::test_mark_one_as_read_persists PASSED [ 91%]
+tests/functional/test_notification_routes.py::test_mark_read_html_redirects PASSED [ 94%]
+tests/functional/test_notification_routes.py::test_mark_all_as_read PASSED [ 97%]
+tests/functional/test_notification_routes.py::test_mark_foreign_notification_404 PASSED [100%]
+
+============================= 37 passed in 17.61s ==============================

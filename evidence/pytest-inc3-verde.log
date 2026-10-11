@@ -1,0 +1,22 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.5, pytest-9.1.1, pluggy-1.6.0 -- /home/Sebastian/Programming/spec-driven-development/Nuevo_Proyecto/.venv/bin/python
+rootdir: /home/Sebastian/Programming/spec-driven-development/Nuevo_Proyecto
+plugins: flask-1.3.0
+collecting ... collected 14 items
+
+tests/services/test_category_service.py::test_create_category_success_and_audit PASSED [  7%]
+tests/services/test_category_service.py::test_create_category_blank_or_too_long_rejected PASSED [ 14%]
+tests/services/test_category_service.py::test_category_name_unique_per_user PASSED [ 21%]
+tests/services/test_category_service.py::test_list_categories_only_own PASSED [ 28%]
+tests/services/test_category_service.py::test_delete_category_unlinks_tasks_and_does_not_delete_them PASSED [ 35%]
+tests/services/test_category_service.py::test_delete_foreign_category_not_found PASSED [ 42%]
+tests/services/test_category_service.py::test_cannot_assign_foreign_category PASSED [ 50%]
+tests/services/test_category_service.py::test_unlink_category_sets_none_and_audits PASSED [ 57%]
+tests/functional/test_category_routes.py::test_list_categories_requires_auth PASSED [ 64%]
+tests/functional/test_category_routes.py::test_create_and_list_categories PASSED [ 71%]
+tests/functional/test_category_routes.py::test_create_category_validation_errors PASSED [ 78%]
+tests/functional/test_category_routes.py::test_delete_category_unlinks_tasks PASSED [ 85%]
+tests/functional/test_category_routes.py::test_delete_foreign_category_not_found PASSED [ 92%]
+tests/functional/test_category_routes.py::test_assign_foreign_category_rejected PASSED [100%]
+
+============================== 14 passed in 5.40s ==============================

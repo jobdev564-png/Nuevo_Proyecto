@@ -1,0 +1,279 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.5, pytest-9.1.1, pluggy-1.6.0 -- /home/Sebastian/Programming/spec-driven-development/Nuevo_Proyecto/.venv/bin/python
+rootdir: /tmp/opencode/rojo-4ba6b11
+plugins: flask-1.3.0
+collecting ... collected 51 items / 38 deselected / 13 selected
+
+tests/services/test_task_service.py::test_new_tasks_get_dense_sort_order_at_end FAILED [  7%]
+tests/services/test_task_service.py::test_get_user_tasks_ordered_by_sort_order FAILED [ 15%]
+tests/services/test_task_service.py::test_direct_jump_pending_to_completed PASSED [ 23%]
+tests/services/test_task_service.py::test_direct_jump_in_progress_to_completed PASSED [ 30%]
+tests/services/test_task_service.py::test_reorder_tasks_persists_dense_order FAILED [ 38%]
+tests/services/test_task_service.py::test_reorder_tasks_is_scoped_to_view FAILED [ 46%]
+tests/services/test_task_service.py::test_reorder_tasks_rejects_foreign_batch_atomically FAILED [ 53%]
+tests/services/test_task_service.py::test_reorder_tasks_rejects_duplicates_and_incomplete FAILED [ 61%]
+tests/functional/test_task_routes.py::test_status_direct_jump_via_fetch_contract PASSED [ 69%]
+tests/functional/test_task_routes.py::test_status_foreign_task_returns_neutral_404 PASSED [ 76%]
+tests/functional/test_task_routes.py::test_reorder_route_persists_and_audits FAILED [ 84%]
+tests/functional/test_task_routes.py::test_reorder_route_rejects_bad_payload_and_requires_session FAILED [ 92%]
+tests/functional/test_task_routes.py::test_reorder_route_foreign_id_is_neutral_404 FAILED [100%]
+
+=================================== FAILURES ===================================
+__________________ test_new_tasks_get_dense_sort_order_at_end __________________
+
+app = <Flask 'src.taskcontrol'>, test_user_id = 1
+
+    def test_new_tasks_get_dense_sort_order_at_end(app, test_user_id):
+        """Tareas nuevas reciben sort_order denso al final: 0, 1, 2... (FR-011)."""
+        with app.app_context():
+            t1 = TaskService.create_task(user_id=test_user_id, title="Primera")
+            t2 = TaskService.create_task(user_id=test_user_id, title="Segunda")
+            t3 = TaskService.create_task(user_id=test_user_id, title="Tercera")
+>           assert (t1.sort_order, t2.sort_order, t3.sort_order) == (0, 1, 2)
+                    ^^^^^^^^^^^^^
+E           AttributeError: 'Task' object has no attribute 'sort_order'
+
+tests/services/test_task_service.py:378: AttributeError
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2026-10-11T17:36:03.628465+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 1, "details": {"title": "Primera", "status": "pending"}}
+{"timestamp": "2026-10-11T17:36:03.631970+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 2, "details": {"title": "Segunda", "status": "pending"}}
+{"timestamp": "2026-10-11T17:36:03.634395+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 3, "details": {"title": "Tercera", "status": "pending"}}
+------------------------------ Captured log call -------------------------------
+INFO     taskcontrol.audit:audit_service.py:51 {"timestamp": "2026-10-11T17:36:03.628465+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 1, "details": {"title": "Primera", "status": "pending"}}
+INFO     taskcontrol.audit:audit_service.py:51 {"timestamp": "2026-10-11T17:36:03.631970+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 2, "details": {"title": "Segunda", "status": "pending"}}
+INFO     taskcontrol.audit:audit_service.py:51 {"timestamp": "2026-10-11T17:36:03.634395+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 3, "details": {"title": "Tercera", "status": "pending"}}
+__________________ test_get_user_tasks_ordered_by_sort_order ___________________
+
+app = <Flask 'src.taskcontrol'>, test_user_id = 1
+
+    def test_get_user_tasks_ordered_by_sort_order(app, test_user_id):
+        """El listado por defecto ordena sort_order ASC, id ASC (data-model.md)."""
+        with app.app_context():
+            from src.taskcontrol.extensions import db
+    
+            t1 = TaskService.create_task(user_id=test_user_id, title="Una")
+            t2 = TaskService.create_task(user_id=test_user_id, title="Dos")
+            t3 = TaskService.create_task(user_id=test_user_id, title="Tres")
+            t3.sort_order, t1.sort_order, t2.sort_order = 0, 1, 2
+            db.session.commit()
+            tasks = TaskService.get_user_tasks(user_id=test_user_id)
+>           assert [t.id for t in tasks] == [t3.id, t1.id, t2.id]
+E           AssertionError: assert [3, 2, 1] == [3, 1, 2]
+E             
+E             At index 1 diff: 2 != 1
+E             
+E             Full diff:
+E               [
+E                   3,
+E             +     2,...
+E             
+E             ...Full output truncated (3 lines hidden), use '-vv' to show
+
+tests/services/test_task_service.py:392: AssertionError
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2026-10-11T17:36:03.815937+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 1, "details": {"title": "Una", "status": "pending"}}
+{"timestamp": "2026-10-11T17:36:03.819045+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 2, "details": {"title": "Dos", "status": "pending"}}
+{"timestamp": "2026-10-11T17:36:03.821269+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 3, "details": {"title": "Tres", "status": "pending"}}
+------------------------------ Captured log call -------------------------------
+INFO     taskcontrol.audit:audit_service.py:51 {"timestamp": "2026-10-11T17:36:03.815937+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 1, "details": {"title": "Una", "status": "pending"}}
+INFO     taskcontrol.audit:audit_service.py:51 {"timestamp": "2026-10-11T17:36:03.819045+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 2, "details": {"title": "Dos", "status": "pending"}}
+INFO     taskcontrol.audit:audit_service.py:51 {"timestamp": "2026-10-11T17:36:03.821269+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 3, "details": {"title": "Tres", "status": "pending"}}
+___________________ test_reorder_tasks_persists_dense_order ____________________
+
+app = <Flask 'src.taskcontrol'>, test_user_id = 1
+
+    def test_reorder_tasks_persists_dense_order(app, test_user_id):
+        """POST reorder persiste renumeración densa 0..N-1 en el orden recibido."""
+        with app.app_context():
+            t1 = TaskService.create_task(user_id=test_user_id, title="A")
+            t2 = TaskService.create_task(user_id=test_user_id, title="B")
+            t3 = TaskService.create_task(user_id=test_user_id, title="C")
+>           TaskService.reorder_tasks(
+            ^^^^^^^^^^^^^^^^^^^^^^^^^
+                user_id=test_user_id, ordered_ids=[t3.id, t1.id, t2.id]
+            )
+E           AttributeError: type object 'TaskService' has no attribute 'reorder_tasks'. Did you mean: 'reopen_task'?
+
+tests/services/test_task_service.py:432: AttributeError
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2026-10-11T17:36:04.294582+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 1, "details": {"title": "A", "status": "pending"}}
+{"timestamp": "2026-10-11T17:36:04.297672+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 2, "details": {"title": "B", "status": "pending"}}
+{"timestamp": "2026-10-11T17:36:04.299728+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 3, "details": {"title": "C", "status": "pending"}}
+------------------------------ Captured log call -------------------------------
+INFO     taskcontrol.audit:audit_service.py:51 {"timestamp": "2026-10-11T17:36:04.294582+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 1, "details": {"title": "A", "status": "pending"}}
+INFO     taskcontrol.audit:audit_service.py:51 {"timestamp": "2026-10-11T17:36:04.297672+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 2, "details": {"title": "B", "status": "pending"}}
+INFO     taskcontrol.audit:audit_service.py:51 {"timestamp": "2026-10-11T17:36:04.299728+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 3, "details": {"title": "C", "status": "pending"}}
+_____________________ test_reorder_tasks_is_scoped_to_view _____________________
+
+app = <Flask 'src.taskcontrol'>, test_user_id = 1
+
+    def test_reorder_tasks_is_scoped_to_view(app, test_user_id):
+        """El reorden con view solo renumera esa vista; el resto conserva valor."""
+        with app.app_context():
+            from src.taskcontrol.extensions import db
+    
+            a = TaskService.create_task(user_id=test_user_id, title="PA")
+            b = TaskService.create_task(user_id=test_user_id, title="PB")
+            done = TaskService.create_task(user_id=test_user_id, title="Done")
+            TaskService.update_task_status(
+                user_id=test_user_id, task_id=done.id, new_status="completed"
+            )
+>           done_before = done.sort_order
+                          ^^^^^^^^^^^^^^^
+E           AttributeError: 'Task' object has no attribute 'sort_order'
+
+tests/services/test_task_service.py:454: AttributeError
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2026-10-11T17:36:04.449003+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 1, "details": {"title": "PA", "status": "pending"}}
+{"timestamp": "2026-10-11T17:36:04.452230+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 2, "details": {"title": "PB", "status": "pending"}}
+{"timestamp": "2026-10-11T17:36:04.454322+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 3, "details": {"title": "Done", "status": "pending"}}
+{"timestamp": "2026-10-11T17:36:04.458543+00:00", "actor_id": 1, "action": "STATUS_CHANGED", "entity_id": 3, "details": {"previous_status": "pending", "current_status": "completed"}}
+------------------------------ Captured log call -------------------------------
+INFO     taskcontrol.audit:audit_service.py:51 {"timestamp": "2026-10-11T17:36:04.449003+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 1, "details": {"title": "PA", "status": "pending"}}
+INFO     taskcontrol.audit:audit_service.py:51 {"timestamp": "2026-10-11T17:36:04.452230+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 2, "details": {"title": "PB", "status": "pending"}}
+INFO     taskcontrol.audit:audit_service.py:51 {"timestamp": "2026-10-11T17:36:04.454322+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 3, "details": {"title": "Done", "status": "pending"}}
+INFO     taskcontrol.audit:audit_service.py:51 {"timestamp": "2026-10-11T17:36:04.458543+00:00", "actor_id": 1, "action": "STATUS_CHANGED", "entity_id": 3, "details": {"previous_status": "pending", "current_status": "completed"}}
+_____________ test_reorder_tasks_rejects_foreign_batch_atomically ______________
+
+app = <Flask 'src.taskcontrol'>, test_user_id = 1, second_user_id = 2
+
+    def test_reorder_tasks_rejects_foreign_batch_atomically(
+        app, test_user_id, second_user_id
+    ):
+        """Lote con id ajeno rechaza íntegro (404 neutro) sin escribir nada."""
+        with app.app_context():
+            from src.taskcontrol.extensions import db
+    
+            mine = TaskService.create_task(user_id=test_user_id, title="Mía")
+            alien = TaskService.create_task(user_id=second_user_id, title="Ajena")
+>           before = mine.sort_order
+                     ^^^^^^^^^^^^^^^
+E           AttributeError: 'Task' object has no attribute 'sort_order'
+
+tests/services/test_task_service.py:474: AttributeError
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2026-10-11T17:36:04.729887+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 1, "details": {"title": "M\u00eda", "status": "pending"}}
+{"timestamp": "2026-10-11T17:36:04.734053+00:00", "actor_id": 2, "action": "TASK_CREATED", "entity_id": 2, "details": {"title": "Ajena", "status": "pending"}}
+------------------------------ Captured log call -------------------------------
+INFO     taskcontrol.audit:audit_service.py:51 {"timestamp": "2026-10-11T17:36:04.729887+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 1, "details": {"title": "M\u00eda", "status": "pending"}}
+INFO     taskcontrol.audit:audit_service.py:51 {"timestamp": "2026-10-11T17:36:04.734053+00:00", "actor_id": 2, "action": "TASK_CREATED", "entity_id": 2, "details": {"title": "Ajena", "status": "pending"}}
+_____________ test_reorder_tasks_rejects_duplicates_and_incomplete _____________
+
+app = <Flask 'src.taskcontrol'>, test_user_id = 1
+
+    def test_reorder_tasks_rejects_duplicates_and_incomplete(app, test_user_id):
+        """Duplicados e incompletos → TaskValidationError sin escritura parcial."""
+        with app.app_context():
+            t1 = TaskService.create_task(user_id=test_user_id, title="X")
+            t2 = TaskService.create_task(user_id=test_user_id, title="Y")
+            with pytest.raises(TaskValidationError):
+>               TaskService.reorder_tasks(
+                ^^^^^^^^^^^^^^^^^^^^^^^^^
+                    user_id=test_user_id, ordered_ids=[t1.id, t1.id]
+                )
+E               AttributeError: type object 'TaskService' has no attribute 'reorder_tasks'. Did you mean: 'reopen_task'?
+
+tests/services/test_task_service.py:489: AttributeError
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2026-10-11T17:36:04.913163+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 1, "details": {"title": "X", "status": "pending"}}
+{"timestamp": "2026-10-11T17:36:04.916495+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 2, "details": {"title": "Y", "status": "pending"}}
+------------------------------ Captured log call -------------------------------
+INFO     taskcontrol.audit:audit_service.py:51 {"timestamp": "2026-10-11T17:36:04.913163+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 1, "details": {"title": "X", "status": "pending"}}
+INFO     taskcontrol.audit:audit_service.py:51 {"timestamp": "2026-10-11T17:36:04.916495+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 2, "details": {"title": "Y", "status": "pending"}}
+____________________ test_reorder_route_persists_and_audits ____________________
+
+client = <FlaskClient <Flask 'src.taskcontrol'>>
+
+    def test_reorder_route_persists_and_audits(client):
+        """POST /tasks/reorder → 200 con envoltorio y orden persistido tras recarga."""
+        ids = _reorder_seed(client)
+        new_order = [ids[2], ids[0], ids[1]]
+        resp = client.post(
+            "/tasks/reorder",
+            json={"ordered_ids": new_order, "view": "all"},
+            headers={"Accept": "application/json"},
+        )
+>       assert resp.status_code == 200
+E       assert 404 == 200
+E        +  where 404 = <WrapperTestResponse streamed [404 NOT FOUND]>.status_code
+
+tests/functional/test_task_routes.py:444: AssertionError
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2026-10-11T17:36:05.965256+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 1, "details": {"title": "R1", "status": "pending"}}
+{"timestamp": "2026-10-11T17:36:05.968727+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 2, "details": {"title": "R2", "status": "pending"}}
+{"timestamp": "2026-10-11T17:36:05.971326+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 3, "details": {"title": "R3", "status": "pending"}}
+------------------------------ Captured log call -------------------------------
+INFO     taskcontrol.audit:audit_service.py:51 {"timestamp": "2026-10-11T17:36:05.965256+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 1, "details": {"title": "R1", "status": "pending"}}
+INFO     taskcontrol.audit:audit_service.py:51 {"timestamp": "2026-10-11T17:36:05.968727+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 2, "details": {"title": "R2", "status": "pending"}}
+INFO     taskcontrol.audit:audit_service.py:51 {"timestamp": "2026-10-11T17:36:05.971326+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 3, "details": {"title": "R3", "status": "pending"}}
+_________ test_reorder_route_rejects_bad_payload_and_requires_session __________
+
+client = <FlaskClient <Flask 'src.taskcontrol'>>
+
+    def test_reorder_route_rejects_bad_payload_and_requires_session(client):
+        """Lote vacío/duplicado → 400; sin sesión → 401."""
+        ids = _reorder_seed(client, "reorder2@example.com")
+    
+        empty = client.post(
+            "/tasks/reorder",
+            json={"ordered_ids": []},
+            headers={"Accept": "application/json"},
+        )
+>       assert empty.status_code == 400
+E       assert 404 == 400
+E        +  where 404 = <WrapperTestResponse streamed [404 NOT FOUND]>.status_code
+
+tests/functional/test_task_routes.py:462: AssertionError
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2026-10-11T17:36:06.245559+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 1, "details": {"title": "R1", "status": "pending"}}
+{"timestamp": "2026-10-11T17:36:06.252526+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 2, "details": {"title": "R2", "status": "pending"}}
+{"timestamp": "2026-10-11T17:36:06.257123+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 3, "details": {"title": "R3", "status": "pending"}}
+------------------------------ Captured log call -------------------------------
+INFO     taskcontrol.audit:audit_service.py:51 {"timestamp": "2026-10-11T17:36:06.245559+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 1, "details": {"title": "R1", "status": "pending"}}
+INFO     taskcontrol.audit:audit_service.py:51 {"timestamp": "2026-10-11T17:36:06.252526+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 2, "details": {"title": "R2", "status": "pending"}}
+INFO     taskcontrol.audit:audit_service.py:51 {"timestamp": "2026-10-11T17:36:06.257123+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 3, "details": {"title": "R3", "status": "pending"}}
+_________________ test_reorder_route_foreign_id_is_neutral_404 _________________
+
+client = <FlaskClient <Flask 'src.taskcontrol'>>
+
+    def test_reorder_route_foreign_id_is_neutral_404(client):
+        """Id de otro usuario → 404 TASK_NOT_FOUND neutro."""
+        ids = _reorder_seed(client, "reorder3@example.com")
+        other = client.__class__(client.application)
+        foreign = _reorder_seed(other, "reorder4@example.com")
+        resp = client.post(
+            "/tasks/reorder",
+            json={"ordered_ids": ids + [foreign[0]]},
+            headers={"Accept": "application/json"},
+        )
+        assert resp.status_code == 404
+>       assert resp.get_json()["code"] == "TASK_NOT_FOUND"
+               ^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: 'NoneType' object is not subscriptable
+
+tests/functional/test_task_routes.py:492: TypeError
+----------------------------- Captured stderr call -----------------------------
+{"timestamp": "2026-10-11T17:36:06.552764+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 1, "details": {"title": "R1", "status": "pending"}}
+{"timestamp": "2026-10-11T17:36:06.558502+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 2, "details": {"title": "R2", "status": "pending"}}
+{"timestamp": "2026-10-11T17:36:06.561740+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 3, "details": {"title": "R3", "status": "pending"}}
+{"timestamp": "2026-10-11T17:36:06.800361+00:00", "actor_id": 2, "action": "TASK_CREATED", "entity_id": 4, "details": {"title": "R1", "status": "pending"}}
+{"timestamp": "2026-10-11T17:36:06.803008+00:00", "actor_id": 2, "action": "TASK_CREATED", "entity_id": 5, "details": {"title": "R2", "status": "pending"}}
+{"timestamp": "2026-10-11T17:36:06.806531+00:00", "actor_id": 2, "action": "TASK_CREATED", "entity_id": 6, "details": {"title": "R3", "status": "pending"}}
+------------------------------ Captured log call -------------------------------
+INFO     taskcontrol.audit:audit_service.py:51 {"timestamp": "2026-10-11T17:36:06.552764+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 1, "details": {"title": "R1", "status": "pending"}}
+INFO     taskcontrol.audit:audit_service.py:51 {"timestamp": "2026-10-11T17:36:06.558502+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 2, "details": {"title": "R2", "status": "pending"}}
+INFO     taskcontrol.audit:audit_service.py:51 {"timestamp": "2026-10-11T17:36:06.561740+00:00", "actor_id": 1, "action": "TASK_CREATED", "entity_id": 3, "details": {"title": "R3", "status": "pending"}}
+INFO     taskcontrol.audit:audit_service.py:51 {"timestamp": "2026-10-11T17:36:06.800361+00:00", "actor_id": 2, "action": "TASK_CREATED", "entity_id": 4, "details": {"title": "R1", "status": "pending"}}
+INFO     taskcontrol.audit:audit_service.py:51 {"timestamp": "2026-10-11T17:36:06.803008+00:00", "actor_id": 2, "action": "TASK_CREATED", "entity_id": 5, "details": {"title": "R2", "status": "pending"}}
+INFO     taskcontrol.audit:audit_service.py:51 {"timestamp": "2026-10-11T17:36:06.806531+00:00", "actor_id": 2, "action": "TASK_CREATED", "entity_id": 6, "details": {"title": "R3", "status": "pending"}}
+=========================== short test summary info ============================
+FAILED tests/services/test_task_service.py::test_new_tasks_get_dense_sort_order_at_end
+FAILED tests/services/test_task_service.py::test_get_user_tasks_ordered_by_sort_order
+FAILED tests/services/test_task_service.py::test_reorder_tasks_persists_dense_order
+FAILED tests/services/test_task_service.py::test_reorder_tasks_is_scoped_to_view
+FAILED tests/services/test_task_service.py::test_reorder_tasks_rejects_foreign_batch_atomically
+FAILED tests/services/test_task_service.py::test_reorder_tasks_rejects_duplicates_and_incomplete
+FAILED tests/functional/test_task_routes.py::test_reorder_route_persists_and_audits
+FAILED tests/functional/test_task_routes.py::test_reorder_route_rejects_bad_payload_and_requires_session
+FAILED tests/functional/test_task_routes.py::test_reorder_route_foreign_id_is_neutral_404
+================== 9 failed, 4 passed, 38 deselected in 3.51s ==================

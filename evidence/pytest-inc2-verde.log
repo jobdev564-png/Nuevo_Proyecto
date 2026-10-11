@@ -1,0 +1,42 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.5, pytest-9.1.1, pluggy-1.6.0 -- /home/Sebastian/Programming/spec-driven-development/Nuevo_Proyecto/.venv/bin/python
+rootdir: /home/Sebastian/Programming/spec-driven-development/Nuevo_Proyecto
+plugins: flask-1.3.0
+collecting ... collected 34 items
+
+tests/services/test_task_reopen.py::test_reopen_completed_returns_pending_with_distinct_audit PASSED [  2%]
+tests/services/test_task_reopen.py::test_reopen_non_completed_rejected PASSED [  5%]
+tests/services/test_task_reopen.py::test_reopen_deleted_rejected PASSED  [  8%]
+tests/services/test_task_reopen.py::test_reopen_other_user_rejected PASSED [ 11%]
+tests/services/test_task_reopen.py::test_status_endpoint_still_blocked_completed_to_pending PASSED [ 14%]
+tests/services/test_task_reopen.py::test_second_concurrent_reopen_rejected_without_duplicate_audit PASSED [ 17%]
+tests/services/test_task_soft_delete.py::test_delete_task_marks_deleted_and_audits PASSED [ 20%]
+tests/services/test_task_soft_delete.py::test_deleted_task_excluded_from_listing PASSED [ 23%]
+tests/services/test_task_soft_delete.py::test_double_delete_rejected_without_new_audit PASSED [ 26%]
+tests/services/test_task_soft_delete.py::test_delete_other_user_task_rejected PASSED [ 29%]
+tests/services/test_task_soft_delete.py::test_edit_status_blocked_on_deleted PASSED [ 32%]
+tests/services/test_password_reset_service.py::test_request_existing_email_returns_neutral_and_token PASSED [ 35%]
+tests/services/test_password_reset_service.py::test_request_unknown_email_identical_neutral_no_token PASSED [ 38%]
+tests/services/test_password_reset_service.py::test_confirm_valid_token_rotates_password_and_invalidates PASSED [ 41%]
+tests/services/test_password_reset_service.py::test_reuse_token_rejected PASSED [ 44%]
+tests/services/test_password_reset_service.py::test_expired_token_rejected PASSED [ 47%]
+tests/services/test_password_reset_service.py::test_new_request_invalidates_previous_tokens PASSED [ 50%]
+tests/services/test_password_reset_service.py::test_weak_password_rejected_with_registration_rule PASSED [ 52%]
+tests/services/test_password_reset_service.py::test_malformed_token_rejected_safely PASSED [ 55%]
+tests/functional/test_task_lifecycle_routes.py::test_delete_task_success PASSED [ 58%]
+tests/functional/test_task_lifecycle_routes.py::test_delete_task_excluded_from_list PASSED [ 61%]
+tests/functional/test_task_lifecycle_routes.py::test_double_delete_rejected PASSED [ 64%]
+tests/functional/test_task_lifecycle_routes.py::test_delete_task_unauthenticated_fails PASSED [ 67%]
+tests/functional/test_task_lifecycle_routes.py::test_delete_other_user_task_rejected PASSED [ 70%]
+tests/functional/test_task_lifecycle_routes.py::test_status_change_blocked_on_deleted PASSED [ 73%]
+tests/functional/test_task_lifecycle_routes.py::test_reopen_completed_success PASSED [ 76%]
+tests/functional/test_task_lifecycle_routes.py::test_reopen_non_completed_rejected PASSED [ 79%]
+tests/functional/test_task_lifecycle_routes.py::test_reopen_deleted_rejected PASSED [ 82%]
+tests/functional/test_task_lifecycle_routes.py::test_status_from_completed_still_blocked PASSED [ 85%]
+tests/functional/test_password_reset_routes.py::test_request_existing_and_unknown_identical PASSED [ 88%]
+tests/functional/test_password_reset_routes.py::test_request_missing_email_400 PASSED [ 91%]
+tests/functional/test_password_reset_routes.py::test_confirm_success_and_login_with_new_password PASSED [ 94%]
+tests/functional/test_password_reset_routes.py::test_confirm_reuse_rejected PASSED [ 97%]
+tests/functional/test_password_reset_routes.py::test_confirm_malformed_and_weak_password PASSED [100%]
+
+============================= 34 passed in 13.69s ==============================
