@@ -20,12 +20,14 @@ def create_app(config_name=None):
     from src.taskcontrol.routes.auth import auth_bp
     from src.taskcontrol.routes.tasks import tasks_bp
     from src.taskcontrol.routes.categories import categories_bp
+    from src.taskcontrol.routes.notifications import notifications_bp
     from src.taskcontrol.routes.main import main_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(auth_bp, url_prefix="/auth")
     app.register_blueprint(tasks_bp, url_prefix="/tasks")
     app.register_blueprint(categories_bp, url_prefix="/categories")
+    app.register_blueprint(notifications_bp, url_prefix="/notifications")
 
     if config_name == "testing":
         # Hook solo para fixtures de testing (research.md R-04).

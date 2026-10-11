@@ -17,6 +17,8 @@ from src.taskcontrol.services.task_service import (
     TaskAlreadyDeletedError,
     TaskDeletedError,
     InvalidStateTransitionError,
+    UserNotFoundError,
+    AssignToSelfError,
 )
 from src.taskcontrol.services.category_service import CategoryService
 
@@ -51,6 +53,7 @@ def list_tasks():
     category_filter = request.args.get("category_id")
     sort_by = request.args.get("sort_by")
     order = request.args.get("order") or "desc"
+    origin = request.args.get("origin")
 
     tasks = TaskService.get_user_tasks(
         user_id=user_id,
@@ -58,6 +61,7 @@ def list_tasks():
         category_id=category_filter,
         sort_by=sort_by,
         order=order,
+        origin=origin,
     )
 
     categories = CategoryService.get_user_categories(user_id=user_id)
@@ -71,6 +75,7 @@ def list_tasks():
                         "tasks": [t.to_dict() for t in tasks],
                         "count": len(tasks),
                         "filter": status_filter,
+                        "origin": origin or "all",
                     },
                 }
             ),
@@ -85,6 +90,7 @@ def list_tasks():
         current_category_id=category_filter,
         current_sort_by=sort_by,
         current_order=order,
+        current_origin=origin or "all",
     )
 
     if _is_json_request():
@@ -111,6 +117,100 @@ def list_tasks():
         current_sort_by=sort_by,
         current_order=order,
     )
+
+
+@tasks_bp.route("/<int:task_id>/assign", methods=["POST"])
+@login_required
+def assign_task_route(task_id: int):
+    """Asignación de tarea propia a otro usuario registrado (HU-10)."""
+    user_id = session["user_id"]
+    data = request.get_json(silent=True) or request.form
+    email = (data.get("email") or "")
+
+    try:
+        task = TaskService.assign_task(
+            actor_id=user_id, task_id=task_id, raw_email=email
+        )
+
+        if _is_json_request():
+            return (
+                jsonify(
+                    {
+                        "status": "success",
+                        "message": "Tarea asignada correctamente",
+                        "data": {
+                            "id": task.id,
+                            "previous_owner_id": user_id,
+                            "new_owner_id": task.user_id,
+                            "assigned_to_email": email.strip().lower(),
+                        },
+                    }
+                ),
+                200,
+            )
+
+        flash("Tarea asignada correctamente.", "success")
+        return redirect(url_for("tasks.list_tasks"))
+
+    except UserNotFoundError as e:
+        if _is_json_request():
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "code": "USER_NOT_FOUND",
+                        "message": str(e),
+                    }
+                ),
+                404,
+            )
+        flash(str(e), "error")
+        return redirect(url_for("tasks.list_tasks")), 404
+
+    except AssignToSelfError as e:
+        if _is_json_request():
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "code": "ASSIGN_TO_SELF",
+                        "message": str(e),
+                    }
+                ),
+                400,
+            )
+        flash(str(e), "error")
+        return redirect(url_for("tasks.list_tasks")), 400
+
+    except TaskValidationError as e:
+        if _is_json_request():
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "code": "VALIDATION_ERROR",
+                        "message": str(e),
+                    }
+                ),
+                400,
+            )
+        flash(str(e), "error")
+        return redirect(url_for("tasks.list_tasks")), 400
+
+    except (TaskNotFoundError, TaskDeletedError):
+        if _is_json_request():
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "code": "TASK_NOT_FOUND",
+                        "message": "Tarea no encontrada",
+                    }
+                ),
+                404,
+            )
+        flash("Tarea no encontrada.", "error")
+        return redirect(url_for("tasks.list_tasks")), 404
 
 
 @tasks_bp.route("/<int:task_id>/priority", methods=["POST", "PATCH"])

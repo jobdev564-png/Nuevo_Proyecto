@@ -11,6 +11,14 @@ class Task(db.Model):
     user_id = db.Column(
         db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
     )
+    # Creador original informativo (HU-10): se fija en create_task() y jamás muta.
+    # La visibilidad y los permisos derivan exclusivamente de user_id.
+    created_by = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False
+    )
+    creator = db.relationship(
+        "User", foreign_keys=[created_by], overlaps="created_tasks"
+    )
     title = db.Column(db.String(150), nullable=False)
     description = db.Column(db.Text, nullable=True)
     due_date = db.Column(db.Date, nullable=True)
@@ -40,9 +48,15 @@ class Task(db.Model):
     )
 
     def to_dict(self):
+        assigned = (
+            self.created_by is not None and self.created_by != self.user_id
+        )
         return {
             "id": self.id,
             "user_id": self.user_id,
+            "created_by": self.created_by,
+            "assigned": assigned,
+            "assigned_by_email": self.assigned_by_email if assigned else None,
             "title": self.title,
             "description": self.description,
             "due_date": self.due_date.isoformat() if self.due_date else None,
@@ -56,6 +70,30 @@ class Task(db.Model):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+
+    @property
+    def assigned_by_email(self) -> str | None:
+        """Correo del último asignador (HU-10, etiqueta "Asignada a mí").
+
+        Fuente: la notificación más reciente de esta tarea; si no existe
+        (filas históricas), el correo del creador original.
+        """
+        from src.taskcontrol.extensions import db
+        from src.taskcontrol.models.notification import Notification
+        from src.taskcontrol.models.user import User
+
+        note = (
+            Notification.query.filter_by(task_id=self.id)
+            .order_by(Notification.id.desc())
+            .first()
+        )
+        if note is not None:
+            assignor = db.session.get(User, note.assigned_by)
+            if assignor is not None:
+                return assignor.email
+        if self.creator is not None:
+            return self.creator.email
+        return None
 
     @property
     def is_overdue(self) -> bool:

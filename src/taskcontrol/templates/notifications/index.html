@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Notificaciones - TaskControl{% endblock %}
+
+{% block content %}
+<div class="tasks-page">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+        <h2>Notificaciones
+            {% if unread_count %}
+                <span class="badge badge-assigned">{{ unread_count }} sin leer</span>
+            {% endif %}
+        </h2>
+        {% if unread_count %}
+            <form action="{{ url_for('notifications.mark_all_read_route') }}" method="POST" class="inline-form">
+                <button type="submit" class="btn btn-secondary btn-sm">Marcar todas como leídas</button>
+            </form>
+        {% endif %}
+    </div>
+
+    <div class="tasks-list">
+        {% if notifications %}
+            {% for note in notifications %}
+                <div class="task-card" {% if note.is_read %}style="opacity: 0.65;"{% endif %}>
+                    <div style="flex: 1;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+                            {% if note.is_read %}
+                                <span class="badge">Leída</span>
+                            {% else %}
+                                <span class="badge badge-assigned">Sin leer</span>
+                            {% endif %}
+                            <h4 style="font-size: 1.1rem; font-weight: 600;">{{ note.task_title or 'Tarea no disponible' }}</h4>
+                        </div>
+                        <div style="font-size: 0.85rem; color: var(--text-muted); display: flex; gap: 1rem;">
+                            <span>👤 Asignada por: {{ note.assigned_by_email or '' }}</span>
+                            <span>🕒 {{ note.created_at or '' }}</span>
+                        </div>
+                        {% if not note.task_title %}
+                            <p style="color: var(--text-muted); font-size: 0.9rem;">La tarea referida ya no está disponible.</p>
+                        {% endif %}
+                    </div>
+                    {% if not note.is_read %}
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <form action="{{ url_for('notifications.mark_read_route', notification_id=note.id) }}" method="POST" class="inline-form">
+                                <button type="submit" class="btn btn-primary btn-sm">Marcar como leída</button>
+                            </form>
+                        </div>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        {% else %}
+            <div style="text-align: center; padding: 3rem 1rem; background: var(--surface); border: 1px dashed var(--border); border-radius: var(--radius); color: var(--text-muted);">
+                <p style="font-size: 1.1rem; margin-bottom: 0.5rem;">No tienes notificaciones.</p>
+                <p style="font-size: 0.9rem;">Cuando alguien te asigne una tarea, aparecerá aquí.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

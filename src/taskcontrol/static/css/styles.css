@@ -175,6 +175,7 @@ body {
 .badge-priority-low { background-color: #e0e7ff; color: #3730a3; }
 .badge-overdue { background-color: #dc2626; color: #ffffff; }
 .badge-category { background-color: #f3e8ff; color: #6b21a8; }
+.badge-assigned { background-color: #dbeafe; color: #1d4ed8; }
 
 .filters {
     display: flex;

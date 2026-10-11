@@ -55,6 +55,13 @@
         <a href="{{ url_for('tasks.list_tasks', status=current_status, sort_by=current_sort_by, order=current_order, category_id='none') }}" class="filter-btn {% if current_category_id == 'none' %}active{% endif %}">Sin categoría</a>
     </div>
 
+    <!-- Filtro de Origen (HU-10: creadas vs asignadas) -->
+    <div class="filters">
+        <a href="{{ url_for('tasks.list_tasks', status=current_status, sort_by=current_sort_by, order=current_order, category_id=current_category_id) }}" class="filter-btn {% if current_origin|default('all') == 'all' %}active{% endif %}">Todas</a>
+        <a href="{{ url_for('tasks.list_tasks', status=current_status, sort_by=current_sort_by, order=current_order, category_id=current_category_id, origin='mine') }}" class="filter-btn {% if current_origin == 'mine' %}active{% endif %}">Creadas por mí</a>
+        <a href="{{ url_for('tasks.list_tasks', status=current_status, sort_by=current_sort_by, order=current_order, category_id=current_category_id, origin='assigned') }}" class="filter-btn {% if current_origin == 'assigned' %}active{% endif %}">Asignadas a mí</a>
+    </div>
+
     <!-- Ordenamiento por Prioridad (HU-07) + Filtros combinados (US4) -->
     <div class="sort-bar" style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap;">
         <span style="font-size: 0.9rem; color: var(--text-muted);">Ordenar:</span>
@@ -87,6 +94,9 @@
                             {% endif %}
                             {% if task.category %}
                                 <span class="badge badge-category">{{ task.category.name }}</span>
+                            {% endif %}
+                            {% if task.created_by and task.created_by != task.user_id %}
+                                <span class="badge badge-assigned">Asignada a mí (por {{ task.creator.email if task.creator else '' }})</span>
                             {% endif %}
                             <h4 style="font-size: 1.1rem; font-weight: 600;">{{ task.title }}</h4>
                         </div>
@@ -132,6 +142,11 @@
                             <button type="submit" class="btn btn-secondary btn-sm">Eliminar</button>
                         </form>
                     </div>
+                    <!-- Asignación a otro usuario registrado (HU-10) -->
+                    <form action="{{ url_for('tasks.assign_task_route', task_id=task.id) }}" method="POST" class="inline-form" style="margin-top: 0.5rem; display: flex; gap: 0.5rem;">
+                        <input type="email" name="email" class="form-control" placeholder="Asignar a (correo registrado)" required style="max-width: 260px;">
+                        <button type="submit" class="btn btn-secondary btn-sm">Asignar</button>
+                    </form>
                 </div>
             {% endfor %}
         {% else %}

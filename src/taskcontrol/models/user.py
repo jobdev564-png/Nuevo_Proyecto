@@ -14,8 +14,27 @@ class User(db.Model):
         db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc)
     )
 
-    # Relación 1 a N con Task
-    tasks = db.relationship("Task", backref="user", lazy=True, cascade="all, delete-orphan")
+    # Relación 1 a N con Task como responsable actual (HU-10: user_id muta
+    # en cada asignación; foreign_keys explícito porque Task tiene dos FK a users)
+    tasks = db.relationship(
+        "Task",
+        backref="user",
+        lazy=True,
+        cascade="all, delete-orphan",
+        foreign_keys="Task.user_id",
+    )
+    # Tareas creadas por el usuario (informativo, HU-10: created_by inmutable)
+    created_tasks = db.relationship(
+        "Task", lazy=True, foreign_keys="Task.created_by"
+    )
+    # Notificaciones recibidas (HU-11)
+    notifications = db.relationship(
+        "Notification",
+        backref="recipient",
+        lazy=True,
+        cascade="all, delete-orphan",
+        foreign_keys="Notification.user_id",
+    )
 
     def to_dict(self):
         return {

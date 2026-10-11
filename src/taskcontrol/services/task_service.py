@@ -29,6 +29,16 @@ class TaskDeletedError(Exception):
     pass
 
 
+class UserNotFoundError(Exception):
+    """El correo destinatario no corresponde a ningún usuario registrado (HU-10)."""
+    pass
+
+
+class AssignToSelfError(Exception):
+    """La tarea ya pertenece al solicitante; asignación sin efecto (HU-10)."""
+    pass
+
+
 class TaskService:
     """Lógica de negocio del ciclo de vida y gestión de tareas (Principio II)."""
 
@@ -96,6 +106,7 @@ class TaskService:
 
         task = Task(
             user_id=user_id,
+            created_by=user_id,
             title=clean_title,
             description=description.strip() if description else None,
             due_date=due_date,
@@ -127,6 +138,7 @@ class TaskService:
         category_id=None,
         sort_by: str = None,
         order: str = "desc",
+        origin: str = None,
     ):
         """Lista las tareas vivas del usuario (excluye eliminación lógica, FR-003).
 
@@ -134,8 +146,16 @@ class TaskService:
         "none"/"uncategorized" para sin categoría). Orden: sort_by="priority"
         usa expresión CASE con desempate determinista; sin sort_by mantiene
         el orden legado por creación descendente.
+
+        origin (HU-10, compatible): "mine" ⇔ creadas por el solicitante,
+        "assigned" ⇔ asignadas por otro (created_by != user_id);
+        "all", ausente o inválido ⇔ todas (comportamiento previo intacto).
         """
         query = Task.query.filter_by(user_id=user_id, is_deleted=False)
+        if origin == "mine":
+            query = query.filter(Task.created_by == user_id)
+        elif origin == "assigned":
+            query = query.filter(Task.created_by != user_id)
         if status in {"pending", "in_progress", "completed"}:
             query = query.filter_by(status=status)
         if category_id is not None:
@@ -322,6 +342,71 @@ class TaskService:
             details={"previous_status": "completed", "current_status": "pending"},
         )
         db.session.commit()
+        return task
+
+    @classmethod
+    def assign_task(cls, actor_id: int, task_id: int, raw_email: str) -> Task:
+        """Transfiere una tarea propia a otro usuario registrado (HU-10).
+
+        En una única transacción: muta ``task.user_id`` al destinatario,
+        registra ``TASK_ASSIGNED`` y crea exactamente una ``Notification``.
+        Cualquier fallo revierte todo (sin transferencia parcial ni aviso
+        huérfano). ``created_by`` jamás muta.
+        """
+        from src.taskcontrol.models.notification import Notification
+        from src.taskcontrol.models.user import User
+        from src.taskcontrol.services.user_service import UserService
+
+        task = Task.query.filter_by(
+            id=task_id, user_id=actor_id, is_deleted=False
+        ).first()
+        if not task:
+            raise TaskNotFoundError("Tarea no encontrada")
+
+        if not raw_email or not str(raw_email).strip():
+            raise TaskValidationError(
+                "El correo del destinatario no es válido"
+            )
+        email = str(raw_email).strip().lower()
+        if not UserService.EMAIL_REGEX.match(email):
+            raise TaskValidationError(
+                "El correo del destinatario no es válido"
+            )
+
+        recipient = User.query.filter_by(email=email).first()
+        if recipient is None:
+            raise UserNotFoundError(
+                "No existe un usuario con ese correo"
+            )
+
+        if recipient.id == actor_id:
+            raise AssignToSelfError("La tarea ya te pertenece")
+
+        previous_owner_id = task.user_id
+        try:
+            task.user_id = recipient.id
+            AuditService.log_event(
+                actor_id=actor_id,
+                action="TASK_ASSIGNED",
+                entity_id=task.id,
+                details={
+                    "previous_owner_id": previous_owner_id,
+                    "new_owner_id": recipient.id,
+                    "assigned_to_email": recipient.email,
+                },
+            )
+            db.session.add(
+                Notification(
+                    user_id=recipient.id,
+                    task_id=task.id,
+                    assigned_by=actor_id,
+                )
+            )
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            raise
+
         return task
 
     @classmethod
